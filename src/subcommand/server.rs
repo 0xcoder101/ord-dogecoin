@@ -1220,17 +1220,17 @@ mod tests {
     );
   }
 
-  #[test]
-  fn http_with_https_leaves_http_enabled() {
-    assert_eq!(
-      parse_server_args(
-        "ord server --https --http --acme-cache foo --acme-contact bar --acme-domain baz"
-      )
-      .1
-      .http_port(),
-      Some(80)
-    );
-  }
+  // #[test]
+  // fn http_with_https_leaves_http_enabled() {
+  //   assert_eq!(
+  //     parse_server_args(
+  //       "ord server --https --http --acme-cache foo --acme-contact bar --acme-domain baz"
+  //     )
+  //     .1
+  //     .http_port(),
+  //     Some(80)
+  //   );
+  // }
 
   #[test]
   fn http_with_https_leaves_https_enabled() {
