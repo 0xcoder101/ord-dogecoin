@@ -146,7 +146,7 @@ impl Index {
       "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
       cookie_file.display()
     );
-    log::info("connect Dogecoin success!");
+    log::info!("connect Dogecoin success!");
 
     let auth = Auth::CookieFile(cookie_file);
 
