@@ -7,6 +7,7 @@ use {
       BlockHashValue, Entry, InscriptionEntry, InscriptionEntryValue, InscriptionIdValue,
       OutPointValue, SatPointValue, SatRange,
     },
+    reorg::*,
     updater::Updater,
   },
   super::*,
@@ -16,13 +17,18 @@ use {
   chrono::SubsecRound,
   indicatif::{ProgressBar, ProgressStyle},
   log::log_enabled,
-  redb::{Database, ReadableTable, Table, TableDefinition, WriteStrategy, WriteTransaction},
+  redb::{
+    Database, DatabaseError, MultimapTable, MultimapTableDefinition, MultimapTableHandle,
+    ReadOnlyTable, ReadableMultimapTable, ReadableTable, RedbKey, RedbValue, StorageError, Table,
+    TableDefinition, TableHandle, WriteTransaction,
+  },
   std::collections::HashMap,
   std::sync::atomic::{self, AtomicBool},
 };
 
 mod entry;
 mod fetcher;
+mod reorg;
 mod rtx;
 mod updater;
 
@@ -53,6 +59,7 @@ pub(crate) struct Index {
   auth: Auth,
   client: Client,
   database: Database,
+  durability: redb::Durability,
   path: PathBuf,
   first_inscription_height: u64,
   genesis_block_coinbase_transaction: Transaction,
@@ -432,6 +439,14 @@ impl Index {
 
   pub(crate) fn block_count(&self) -> Result<u64> {
     self.begin_read()?.block_count()
+  }
+  
+  pub(crate) fn block_height(&self) -> Result<Option<Height>> {
+    self.begin_read()?.block_height()
+  }
+
+  pub(crate) fn block_hash(&self, height: Option<u32>) -> Result<Option<BlockHash>> {
+    self.begin_read()?.block_hash(height)
   }
 
   pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
@@ -961,7 +976,7 @@ impl Index {
     Ok(
       satpoint_to_id
         .range::<&[u8; 44]>(&start..=&end)?
-        .map(|(satpoint, id)| (Entry::load(*satpoint.value()), Entry::load(*id.value()))),
+        .map(|Ok((satpoint, id))| (Entry::load(*satpoint.value()), Entry::load(*id.value()))),
     )
   }
 }
