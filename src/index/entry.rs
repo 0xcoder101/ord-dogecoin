@@ -8,10 +8,10 @@ pub(super) trait Entry: Sized {
   fn store(self) -> Self::Value;
 }
 
-pub(super) type BlockHashValue = [u8; 32];
+pub(super) type HeaderValue = [u8; 32];
 
 impl Entry for BlockHash {
-  type Value = BlockHashValue;
+  type Value = HeaderValue;
 
   fn load(value: Self::Value) -> Self {
     BlockHash::from_inner(value)

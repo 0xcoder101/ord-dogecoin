@@ -4,7 +4,7 @@ use std::io::Cursor;
 use {
   self::{
     entry::{
-      BlockHashValue, Entry, InscriptionEntry, InscriptionEntryValue, InscriptionIdValue,
+      HeaderValue, Entry, InscriptionEntry, InscriptionEntryValue, InscriptionIdValue,
       OutPointValue, SatPointValue, SatRange,
     },
     reorg::*,
@@ -41,7 +41,8 @@ macro_rules! define_table {
   };
 }
 
-define_table! { HEIGHT_TO_BLOCK_HASH, u64, &BlockHashValue }
+define_table! { HEIGHT_TO_BLOCK_HEADER, u32, &HeaderValue }
+// define_table! { HEIGHT_TO_BLOCK_HASH, u64, &HeaderValue }
 define_table! { INSCRIPTION_ID_TO_INSCRIPTION_ENTRY, &InscriptionIdValue, InscriptionEntryValue }
 define_table! { INSCRIPTION_ID_TO_SATPOINT, &InscriptionIdValue, &SatPointValue }
 define_table! { INSCRIPTION_NUMBER_TO_INSCRIPTION_ID, u64, &InscriptionIdValue }
@@ -216,7 +217,9 @@ impl Index {
           tx
         };
 
-        tx.open_table(HEIGHT_TO_BLOCK_HASH)?;
+        tx.open_table(HEIGHT_TO_BLOCK_HEADER)?;
+        // tx.open_table(HEIGHT_TO_BLOCK_HASH)?;
+
         tx.open_table(INSCRIPTION_ID_TO_INSCRIPTION_ENTRY)?;
         tx.open_table(INSCRIPTION_ID_TO_SATPOINT)?;
         tx.open_table(INSCRIPTION_NUMBER_TO_INSCRIPTION_ID)?;
@@ -357,15 +360,27 @@ impl Index {
         .get(&Statistic::OutputsTraversed.key())?
         .map(|x| x.value())
         .unwrap_or(0);
+
+      // shaneson update
+      // let _block_indexed = wtx
+      //   .open_table(HEIGHT_TO_BLOCK_HASH)?
+      //   .range(0..)?
+      //   .rev()
+      //   .next()
+      //   .map(|(height, _hash)| height.value() + 1)
+      //   .unwrap_or(0);
+      
+      let _block_indexed = wtx
+        .open_table(HEIGHT_TO_BLOCK_HEADER)?
+        .range(0..)?
+        .next_back()
+        .and_then(|result| result.ok())
+        .map(|(height, _header)| height.value() + 1)
+        .unwrap_or(0);
+
       Info {
         index_path: self.path.clone(),
-        blocks_indexed: wtx
-          .open_table(HEIGHT_TO_BLOCK_HASH)?
-          .range(0..)?
-          .rev()
-          .next()
-          .map(|(height, _hash)| height.value() + 1)
-          .unwrap_or(0),
+        blocks_indexed: _block_indexed,
         branch_pages: stats.branch_pages(),
         fragmented_bytes: stats.fragmented_bytes(),
         index_file_size: fs::metadata(&self.path)?.len(),
@@ -457,17 +472,39 @@ impl Index {
     self.begin_read()?.block_hash(height)
   }
 
-  pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
-    let mut blocks = Vec::new();
+  // shaneson update
+  // pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
+  //   let mut blocks = Vec::new();
 
+  //   let rtx = self.begin_read()?;
+
+  //   let block_count = rtx.block_count()?;
+
+  //   let height_to_block_hash = rtx.0.open_table(HEIGHT_TO_BLOCK_HASH)?;
+
+  //   for next in height_to_block_hash.range(0..block_count)?.rev().take(take) {
+  //     blocks.push((next.0.value(), Entry::load(*next.1.value())));
+  //   }
+
+  //   Ok(blocks)
+  // }
+
+  pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
     let rtx = self.begin_read()?;
 
     let block_count = rtx.block_count()?;
 
-    let height_to_block_hash = rtx.0.open_table(HEIGHT_TO_BLOCK_HASH)?;
+    let height_to_block_header = rtx.0.open_table(HEIGHT_TO_BLOCK_HEADER)?;
 
-    for next in height_to_block_hash.range(0..block_count)?.rev().take(take) {
-      blocks.push((next.0.value(), Entry::load(*next.1.value())));
+    let mut blocks = Vec::with_capacity(block_count.try_into().unwrap());
+
+    for next in height_to_block_header
+      .range(0..block_count)?
+      .rev()
+      .take(take)
+    {
+      let next = next?;
+      blocks.push(( u64::from(next.0.value()),  Header::load(*next.1.value()).block_hash()));
     }
 
     Ok(blocks)
@@ -514,41 +551,55 @@ impl Index {
     self.client.get_block_header_info(&hash).into_option()
   }
 
+  // pub(crate) fn get_block_by_height(&self, height: u64) -> Result<Option<Block>> {
+  //   let tx = self.database.begin_read()?;
+
+  //   let indexed = tx.open_table(HEIGHT_TO_BLOCK_HASH)?.get(&height)?.is_some();
+
+  //   if !indexed {
+  //     return Ok(None);
+  //   }
+
+  //   Ok(
+  //     self
+  //       .client
+  //       .get_block_hash(height)
+  //       .into_option()?
+  //       .map(|hash| self.client.get_block(&hash))
+  //       .transpose()?,
+  //   )
+  // }
+
   pub(crate) fn get_block_by_height(&self, height: u64) -> Result<Option<Block>> {
-    let tx = self.database.begin_read()?;
-
-    let indexed = tx.open_table(HEIGHT_TO_BLOCK_HASH)?.get(&height)?.is_some();
-
-    if !indexed {
-      return Ok(None);
-    }
-
     Ok(
       self
         .client
-        .get_block_hash(height)
+        .get_block_hash(height.into())
         .into_option()?
         .map(|hash| self.client.get_block(&hash))
         .transpose()?,
     )
   }
 
+  // update shaneson
+  // pub(crate) fn get_block_by_hash(&self, hash: BlockHash) -> Result<Option<Block>> {
+  //   let tx = self.database.begin_read()?;
 
+  //   // check if the given hash exists as a value in the database
+  //   let indexed = tx
+  //     .open_table(HEIGHT_TO_BLOCK_HASH)?
+  //     .range(0..)?
+  //     .rev()
+  //     .any(|(_, block_hash)| block_hash.value() == hash.as_inner());
+
+  //   if !indexed {
+  //     return Ok(None);
+  //   }
+
+  //   self.client.get_block(&hash).into_option()
+  // }
 
   pub(crate) fn get_block_by_hash(&self, hash: BlockHash) -> Result<Option<Block>> {
-    let tx = self.database.begin_read()?;
-
-    // check if the given hash exists as a value in the database
-    let indexed = tx
-      .open_table(HEIGHT_TO_BLOCK_HASH)?
-      .range(0..)?
-      .rev()
-      .any(|(_, block_hash)| block_hash.value() == hash.as_inner());
-
-    if !indexed {
-      return Ok(None);
-    }
-
     self.client.get_block(&hash).into_option()
   }
 
@@ -768,13 +819,21 @@ impl Index {
       Some(block) => Ok(Blocktime::confirmed(block.header.time)),
       None => {
         let tx = self.database.begin_read()?;
+        // update shaneson
+        // let current = tx
+        //   .open_table(HEIGHT_TO_BLOCK_HASH)?
+        //   .range(0..)?
+        //   .rev()
+        //   .next()
+        //   .map(|(height, _hash)| height)
+        //   .map(|x| x.value())
+        //   .unwrap_or(0);
 
-        let current = tx
-          .open_table(HEIGHT_TO_BLOCK_HASH)?
+        let current = tx.open_table(HEIGHT_TO_BLOCK_HEADER)?
           .range(0..)?
-          .rev()
-          .next()
-          .map(|(height, _hash)| height)
+          .next_back()
+          .and_then(|result| result.ok())
+          .map(|(height, _header)| height)
           .map(|x| x.value())
           .unwrap_or(0);
 

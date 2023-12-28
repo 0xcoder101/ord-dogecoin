@@ -43,11 +43,20 @@ impl Updater {
   pub(crate) fn update(index: &Index) -> Result {
     let wtx = index.begin_write()?;
 
+    // update shaneson
+    // let height = wtx
+    //   .open_table(HEIGHT_TO_BLOCK_HASH)?
+    //   .range(0..)?
+    //   .rev()
+    //   .next()
+    //   .map(|(height, _hash)| height.value() + 1)
+    //   .unwrap_or(0);
+
     let height = wtx
-      .open_table(HEIGHT_TO_BLOCK_HASH)?
+      .open_table(HEIGHT_TO_BLOCK_HEADER)?
       .range(0..)?
-      .rev()
-      .next()
+      .next_back()
+      .and_then(|result| result.ok())
       .map(|(height, _hash)| height.value() + 1)
       .unwrap_or(0);
 
@@ -136,13 +145,23 @@ impl Updater {
         value_cache = HashMap::new();
         uncommitted = 0;
         wtx = index.begin_write()?;
+
+        // update shaneson
+        // let height = wtx
+        //   .open_table(HEIGHT_TO_BLOCK_HASH)?
+        //   .range(0..)?
+        //   .rev()
+        //   .next()
+        //   .map(|(height, _hash)| height.value() + 1)
+        //   .unwrap_or(0);
         let height = wtx
-          .open_table(HEIGHT_TO_BLOCK_HASH)?
-          .range(0..)?
-          .rev()
-          .next()
-          .map(|(height, _hash)| height.value() + 1)
-          .unwrap_or(0);
+            .open_table(HEIGHT_TO_BLOCK_HEADER)?
+            .range(0..)?
+            .next_back()
+            .and_then(|result| result.ok())
+            .map(|(height, _hash)| height.value() + 1)
+            .unwrap_or(0);
+
         if height != self.height {
           // another update has run between committing and beginning the new
           // write transaction
@@ -382,7 +401,8 @@ impl Updater {
       }
     }
 
-    let mut height_to_block_hash = wtx.open_table(HEIGHT_TO_BLOCK_HASH)?;
+    // let mut height_to_block_hash = wtx.open_table(HEIGHT_TO_BLOCK_HASH)?;
+    let mut height_to_block_header = wtx.open_table(HEIGHT_TO_BLOCK_HEADER)?;
 
     let start = Instant::now();
     let mut sat_ranges_written = 0;
@@ -396,15 +416,16 @@ impl Updater {
       time,
       block.txdata.len()
     );
+    
+    // shaneson TODO reorg detected
+    // if let Some(prev_height) = self.height.checked_sub(1) {
+    //   let prev_hash = height_to_block_hash.get(&prev_height)?.unwrap();
 
-    if let Some(prev_height) = self.height.checked_sub(1) {
-      let prev_hash = height_to_block_hash.get(&prev_height)?.unwrap();
-
-      if prev_hash.value() != block.header.prev_blockhash.as_ref() {
-        index.reorged.store(true, atomic::Ordering::Relaxed);
-        return Err(anyhow!("reorg detected at or before {prev_height}"));
-      }
-    }
+    //   if prev_hash.value() != block.header.prev_blockhash.as_ref() {
+    //     index.reorged.store(true, atomic::Ordering::Relaxed);
+    //     return Err(anyhow!("reorg detected at or before {prev_height}"));
+    //   }
+    // }
 
     let mut inscription_id_to_inscription_entry =
       wtx.open_table(INSCRIPTION_ID_TO_INSCRIPTION_ENTRY)?;
@@ -539,8 +560,10 @@ impl Updater {
 
     statistic_to_count.insert(&Statistic::LostSats.key(), &lost_sats)?;
 
-    // shaneson todo0
-    height_to_block_hash.insert(&self.height, &block.header.block_hash().store())?;
+    // shaneson update
+    // height_to_block_hash.insert(&self.height, &block.header.block_hash().store())?;
+    height_to_block_header.insert(&self.height, &block.header.store())?;
+
 
     self.height += 1;
     self.outputs_traversed += outputs_in_block;
