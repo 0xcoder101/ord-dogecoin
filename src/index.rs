@@ -60,7 +60,6 @@ pub(crate) struct Index {
   auth: Auth,
   client: Client,
   database: Database,
-  reorg_helper: Reorg,
   durability: redb::Durability,
   path: PathBuf,
   first_inscription_height: u64,
@@ -254,16 +253,11 @@ impl Index {
       redb::Durability::Immediate
     };
 
-    let reorg_helper = Reorg {
-        last_save_point: None
-    };
-
     Ok(Self {
       genesis_block_coinbase_txid: genesis_block_coinbase_transaction.txid(),
       auth,
       client,
       database,
-      reorg_helper,
       durability,
       path,
       first_inscription_height: options.first_inscription_height(),
@@ -477,10 +471,6 @@ impl Index {
     }
 
     Ok(blocks)
-  }
-
-  pub(crate) fn get_reorg_helper(&self) -> Result<Reorg> {
-    Ok(self.reorg_helper)
   }
 
   pub(crate) fn rare_sat_satpoints(&self) -> Result<Option<Vec<(Sat, SatPoint)>>> {
