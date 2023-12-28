@@ -17,11 +17,7 @@ use {
   chrono::SubsecRound,
   indicatif::{ProgressBar, ProgressStyle},
   log::log_enabled,
-  redb::{
-    Database, DatabaseError, MultimapTable, MultimapTableDefinition, MultimapTableHandle,
-    ReadOnlyTable, ReadableMultimapTable, ReadableTable, RedbKey, RedbValue, StorageError, Table,
-    TableDefinition, TableHandle, WriteTransaction,
-  },
+  redb::{Database, ReadableTable, Table, TableDefinition, WriteStrategy, WriteTransaction, Savepoint},
   std::collections::HashMap,
   std::sync::atomic::{self, AtomicBool},
 };
@@ -59,6 +55,7 @@ pub(crate) struct Index {
   auth: Auth,
   client: Client,
   database: Database,
+  reorg_helper: Reorg,
   durability: redb::Durability,
   path: PathBuf,
   first_inscription_height: u64,
@@ -170,7 +167,6 @@ impl Index {
     } else {
       data_dir.join("index.redb")
     };
-
     let database = match unsafe { Database::builder().open_mmapped(&path) } {
       Ok(database) => {
         let schema_version = database
@@ -247,11 +243,23 @@ impl Index {
     let genesis_block_coinbase_transaction =
       options.chain().genesis_block().coinbase().unwrap().clone();
 
+    let durability = if cfg!(test) {
+      redb::Durability::None
+    } else {
+      redb::Durability::Immediate
+    };
+
+    let reorg_helper = Reorg {
+        last_save_point: None
+    };
+
     Ok(Self {
       genesis_block_coinbase_txid: genesis_block_coinbase_transaction.txid(),
       auth,
       client,
       database,
+      reorg_helper,
+      durability,
       path,
       first_inscription_height: options.first_inscription_height(),
       genesis_block_coinbase_transaction,
@@ -419,6 +427,7 @@ impl Index {
     Ok(())
   }
 
+
   #[cfg(test)]
   pub(crate) fn statistic(&self, statistic: Statistic) -> u64 {
     self
@@ -442,7 +451,7 @@ impl Index {
   }
   
   pub(crate) fn block_height(&self) -> Result<Option<Height>> {
-    self.begin_read()?.block_height()
+    self.begin_read()?.height()
   }
 
   pub(crate) fn block_hash(&self, height: Option<u32>) -> Result<Option<BlockHash>> {
@@ -463,6 +472,16 @@ impl Index {
     }
 
     Ok(blocks)
+  }
+
+  pub(crate) fn update_reorg_helper(&mut self, save_point: Savepoint) {
+      self.reorg_helper = Reorg {
+        last_save_point: Some(save_point)
+      };
+  }
+
+  pub(crate) fn get_reorg_helper(&self) -> Result<Reorg> {
+    Ok(self.reorg_helper)
   }
 
   pub(crate) fn rare_sat_satpoints(&self) -> Result<Option<Vec<(Sat, SatPoint)>>> {
@@ -524,6 +543,8 @@ impl Index {
         .transpose()?,
     )
   }
+
+
 
   pub(crate) fn get_block_by_hash(&self, hash: BlockHash) -> Result<Option<Block>> {
     let tx = self.database.begin_read()?;
@@ -976,7 +997,7 @@ impl Index {
     Ok(
       satpoint_to_id
         .range::<&[u8; 44]>(&start..=&end)?
-        .map(|Ok((satpoint, id))| (Entry::load(*satpoint.value()), Entry::load(*id.value()))),
+        .map(|(satpoint, id)| (Entry::load(*satpoint.value()), Entry::load(*id.value())))
     )
   }
 }

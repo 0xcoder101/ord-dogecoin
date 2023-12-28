@@ -131,7 +131,7 @@ impl Updater {
 
       uncommitted += 1;
 
-      if uncommitted == 5000 {
+      if uncommitted == 1000 {
         self.commit(wtx, value_cache)?;
         value_cache = HashMap::new();
         uncommitted = 0;
@@ -336,7 +336,7 @@ impl Updater {
     block: BlockData,
     value_cache: &mut HashMap<OutPoint, u64>,
   ) -> Result<()> {
-    Reorg::detect_reorg(&block, self.height, index)?;
+    Reorg::detect_reorg(&block, self.height.try_into().unwrap(), index)?;
 
     // If value_receiver still has values something went wrong with the last block
     // Could be an assert, shouldn't recover from this and commit the last block
@@ -539,6 +539,7 @@ impl Updater {
 
     statistic_to_count.insert(&Statistic::LostSats.key(), &lost_sats)?;
 
+    // shaneson todo0
     height_to_block_hash.insert(&self.height, &block.header.block_hash().store())?;
 
     self.height += 1;
@@ -657,6 +658,8 @@ impl Updater {
     Index::increment_statistic(&wtx, Statistic::SatRanges, self.sat_ranges_since_flush)?;
     self.sat_ranges_since_flush = 0;
     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
+
+    // Reorg::update_savepoints(self.index, self.height)?;
 
     wtx.commit()?;
     Ok(())

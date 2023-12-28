@@ -27,4 +27,16 @@ impl Rtx<'_> {
         .unwrap_or(0),
     )
   }
+
+  pub(crate) fn block_hash(&self, height: Option<u32>) -> Result<Option<BlockHash>> {
+    Ok(
+        self
+          .0
+          .open_table(HEIGHT_TO_BLOCK_HASH)?
+          .range(0..)?
+          .rev()
+          .next()
+          .map(|(_height, hash)| BlockHash::from_slice(hash.value()).ok().unwrap() ),
+    )  
+  }
 }
