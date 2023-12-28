@@ -17,7 +17,12 @@ use {
   chrono::SubsecRound,
   indicatif::{ProgressBar, ProgressStyle},
   log::log_enabled,
-  redb::{Database, ReadableTable, Table, TableDefinition, WriteStrategy, WriteTransaction, Savepoint},
+  redb::{
+    Database, DatabaseError, MultimapTable, MultimapTableDefinition, MultimapTableHandle,
+    ReadOnlyTable, ReadableMultimapTable, ReadableTable, RedbKey, RedbValue, StorageError, Table,
+    TableDefinition, TableHandle, WriteTransaction,
+  },
+  // redb::{Database, ReadableTable, Table, TableDefinition, WriteStrategy, WriteTransaction, Savepoint},
   std::collections::HashMap,
   std::sync::atomic::{self, AtomicBool},
 };
