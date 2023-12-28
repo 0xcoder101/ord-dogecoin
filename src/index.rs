@@ -479,12 +479,6 @@ impl Index {
     Ok(blocks)
   }
 
-  pub(crate) fn update_reorg_helper(&mut self, save_point: Savepoint) {
-      self.reorg_helper = Reorg {
-        last_save_point: Some(save_point)
-      };
-  }
-
   pub(crate) fn get_reorg_helper(&self) -> Result<Reorg> {
     Ok(self.reorg_helper)
   }
