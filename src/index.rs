@@ -422,7 +422,31 @@ impl Index {
   }
 
   pub(crate) fn update(&self) -> Result {
-    Updater::update(self)
+    let mut updater = Updater::new(self)?;
+
+    loop {
+      match updater.update_index() {
+        Ok(ok) => return Ok(ok),
+        Err(err) => {
+          log::info!("{}", err.to_string());
+          return Err(err)
+          // match err.downcast_ref() {
+          //   Some(&ReorgError::Recoverable { height, depth }) => {
+          //     Reorg::handle_reorg(self, height, depth)?;
+
+          //     updater = Updater::new(self)?;
+          //   }
+          //   Some(&ReorgError::Unrecoverable) => {
+          //     self
+          //       .unrecoverably_reorged
+          //       .store(true, atomic::Ordering::Relaxed);
+          //     return Err(anyhow!(ReorgError::Unrecoverable));
+          //   }
+          //   _ => return Err(err),
+          // };
+        }
+      }
+    }
   }
 
   pub(crate) fn is_reorged(&self) -> bool {

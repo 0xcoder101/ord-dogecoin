@@ -62,7 +62,7 @@ use {
     process::{self, Command},
     str::FromStr,
     sync::{
-      atomic::{self, AtomicU64},
+      atomic::{self, AtomicU64, AtomicBool},
       Arc, Mutex,
     },
     thread,
@@ -143,6 +143,8 @@ const SUBSIDY_HALVING_INTERVAL: u64 =
   bitcoin::blockdata::constants::SUBSIDY_HALVING_INTERVAL as u64;
 const CYCLE_EPOCHS: u64 = 6;
 const COIN_VALUE: u64 = COIN_VALUE_BITCOIN;
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+
 
 pub fn main() {
   env_logger::init();
