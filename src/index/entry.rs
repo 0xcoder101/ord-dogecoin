@@ -30,7 +30,7 @@ pub(crate) struct InscriptionEntry {
   pub(crate) timestamp: u32,
 }
 
-pub(crate) type InscriptionEntryValue = (u64, u64, u64, u128, u32);
+pub(crate) type InscriptionEntryValue = (u64, u64, u64, u64, u32);
 
 impl Entry for InscriptionEntry {
   type Value = InscriptionEntryValue;
@@ -40,7 +40,7 @@ impl Entry for InscriptionEntry {
       fee,
       height,
       number,
-      sat: if sat == u128::MAX {
+      sat: if sat == u64::MAX {
         None
       } else {
         Some(Sat(sat))
@@ -56,7 +56,7 @@ impl Entry for InscriptionEntry {
       self.number,
       match self.sat {
         Some(sat) => sat.n(),
-        None => u128::MAX,
+        None => u64::MAX,
       },
       self.timestamp,
     )
@@ -117,31 +117,29 @@ impl Entry for SatPoint {
   }
 }
 
-pub(super) type SatRange = (u128, u128);
+pub(super) type SatRange = (u64, u64);
 
 impl Entry for SatRange {
-  type Value = [u8; 24];
+  type Value = [u8; 11];
 
-  fn load(
-    [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21, b22, b23]: Self::Value,
-  ) -> Self {
-    let start = u128::from_le_bytes([
-      b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15,
-    ]);
+  fn load([b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10]: Self::Value) -> Self {
+    let raw_base = u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, 0]);
 
-    let range = u64::from_le_bytes([b16, b17, b18, b19, b20, b21, b22, b23]);
+    // 51 bit base
+    let base = raw_base & ((1 << 51) - 1);
 
-    (start, start + range as u128)
+    let raw_delta = u64::from_le_bytes([b6, b7, b8, b9, b10, 0, 0, 0]);
+
+    // 33 bit delta
+    let delta = raw_delta >> 3;
+
+    (base, base + delta)
   }
 
   fn store(self) -> Self::Value {
-    let start = self.0;
-    let range = u64::try_from(self.1 - self.0).unwrap();
-    let start_bytes = u128::to_le_bytes(start);
-    let range_bytes = u64::to_le_bytes(range);
-    let mut out = [0_u8; 24];
-    unsafe { std::ptr::copy_nonoverlapping(start_bytes.as_ptr(), out.as_mut_ptr(), 16) }
-    unsafe { std::ptr::copy_nonoverlapping(range_bytes.as_ptr(), out.as_mut_ptr().add(16), 8) }
-    out
+    let base = self.0;
+    let delta = self.1 - self.0;
+    let n = u128::from(base) | u128::from(delta) << 51;
+    n.to_le_bytes()[0..11].try_into().unwrap()
   }
 }

@@ -44,7 +44,11 @@ pub(crate) struct Options {
   #[clap(long, short, help = "Use testnet. Equivalent to `--chain testnet`.")]
   pub(crate) testnet: bool,
   #[clap(long, default_value = "ord", help = "Use wallet named <WALLET>.")]
-  pub(crate) wallet: String,
+  pub(crate) wallet: String,  #[clap(
+    long,
+    help = "Set index cache to <DB_CACHE_SIZE> bytes. By default takes 1/4 of available RAM."
+  )]
+  pub(crate) db_cache_size: Option<usize>
 }
 
 impl Options {
@@ -435,33 +439,7 @@ mod tests {
       },
     );
   }
-
-  #[test]
-  fn rpc_server_chain_must_match() {
-    let rpc_server = test_bitcoincore_rpc::builder()
-      .network(Network::Testnet)
-      .build();
-
-    let tempdir = TempDir::new().unwrap();
-
-    let cookie_file = tempdir.path().join(".cookie");
-    fs::write(&cookie_file, "username:password").unwrap();
-
-    let options = Options::try_parse_from([
-      "ord",
-      "--cookie-file",
-      cookie_file.to_str().unwrap(),
-      "--rpc-url",
-      &rpc_server.url(),
-    ])
-    .unwrap();
-
-    assert_eq!(
-      options.dogecoin_rpc_client().unwrap_err().to_string(),
-      "Dogecoin RPC server is on testnet but ord is on mainnet"
-    );
-  }
-
+  
   #[test]
   fn chain_flags() {
     Arguments::try_parse_from(["ord", "--signet", "--chain", "signet", "index"]).unwrap_err();

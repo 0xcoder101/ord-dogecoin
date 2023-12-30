@@ -40,6 +40,7 @@ pub(crate) struct Updater {
 }
 
 impl Updater {
+  // shaneson: check
   pub(crate) fn update(index: &Index) -> Result {
     let wtx = index.begin_write()?;
 
@@ -57,7 +58,7 @@ impl Updater {
       .range(0..)?
       .next_back()
       .and_then(|result| result.ok())
-      .map(|(height, _hash)| height.value() + 1)
+      .map(|(height, _hash)| u64::from(height.value() + 1))
       .unwrap_or(0);
 
     wtx
@@ -159,7 +160,7 @@ impl Updater {
             .range(0..)?
             .next_back()
             .and_then(|result| result.ok())
-            .map(|(height, _hash)| height.value() + 1)
+            .map(|(height, _hash)| u64::from(height.value() + 1))
             .unwrap_or(0);
 
         if height != self.height {
@@ -471,7 +472,7 @@ impl Updater {
       let h = Height(self.height);
       if h.subsidy() > 0 {
         let start = h.starting_sat();
-        coinbase_inputs.push_front((start.n(), (start + h.subsidy() as u128).n()));
+        coinbase_inputs.push_front((start.n(), (start + h.subsidy()).n()));
         self.sat_ranges_since_flush += 1;
       }
 
@@ -562,7 +563,7 @@ impl Updater {
 
     // shaneson update
     // height_to_block_hash.insert(&self.height, &block.header.block_hash().store())?;
-    height_to_block_header.insert(&self.height, &block.header.store())?;
+    height_to_block_header.insert(&self.height, &block.header.block_hash().store())?;
 
 
     self.height += 1;
@@ -580,8 +581,8 @@ impl Updater {
     &mut self,
     tx: &Transaction,
     txid: Txid,
-    sat_to_satpoint: &mut Table<u128, &SatPointValue>,
-    input_sat_ranges: &mut VecDeque<(u128, u128)>,
+    sat_to_satpoint: &mut Table<u64, &SatPointValue>,
+    input_sat_ranges: &mut VecDeque<(u64, u64)>,
     sat_ranges_written: &mut u64,
     outputs_traversed: &mut u64,
     inscription_updater: &mut InscriptionUpdater,
@@ -619,7 +620,7 @@ impl Updater {
 
         let assigned = if count > remaining {
           self.sat_ranges_since_flush += 1;
-          let middle = range.0 + remaining as u128;
+          let middle = range.0 + remaining;
           input_sat_ranges.push_front((middle, range.1));
           (range.0, middle)
         } else {

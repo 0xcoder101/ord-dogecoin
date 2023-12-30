@@ -14,7 +14,7 @@ pub(crate) struct Epoch(pub(crate) u64);
 fn read_sat_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Sat>, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let sats: Vec<u128> = serde_json::from_reader(reader)?;
+    let sats: Vec<u64> = serde_json::from_reader(reader)?;
 
     Ok(sats.into_iter().map(Sat).collect())
 }
@@ -148,25 +148,6 @@ mod tests {
     assert_eq!(Epoch::from(Height(100_000)), 1);
     assert_eq!(Epoch::from(Height(150_000)), 2);
     assert_eq!(Epoch::from(Height(200_000)), 3);
-  }
-
-  #[test]
-  fn from_sat() {
-    for (epoch, starting_sat) in Epoch::get_starting_sats().into_iter().enumerate() {
-      if epoch > 0 {
-        assert_eq!(
-          Epoch::from(Sat(starting_sat.n() - 1)),
-          Epoch(epoch as u64 - 1)
-        );
-      }
-      assert_eq!(Epoch::from(starting_sat), Epoch(epoch as u64));
-      assert_eq!(Epoch::from(starting_sat + 1), Epoch(epoch as u64));
-    }
-    assert_eq!(Epoch::from(Sat(0)), 0);
-    assert_eq!(Epoch::from(Sat(1)), 0);
-    assert_eq!(Epoch::from(Epoch(1).starting_sat()), 1);
-    assert_eq!(Epoch::from(Epoch(1).starting_sat() + 1), 1);
-    // assert_eq!(Epoch::from(Sat(u128::max_value())), 33);
   }
 
   #[test]

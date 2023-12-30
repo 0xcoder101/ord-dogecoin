@@ -8,7 +8,7 @@ pub(crate) struct Traits {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Output {
-  pub number: u128,
+  pub number: u64,
   pub decimal: String,
   pub height: u64,
   pub epoch: u64,

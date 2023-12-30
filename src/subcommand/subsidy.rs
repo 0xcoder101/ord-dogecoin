@@ -8,7 +8,7 @@ pub(crate) struct Subsidy {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Output {
-  pub first: u128,
+  pub first: u64,
   pub subsidy: u64,
 }
 

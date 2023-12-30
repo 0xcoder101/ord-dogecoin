@@ -2,7 +2,7 @@ use {super::*, updater::BlockData};
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum ReorgError {
-  Recoverable { height: u32, depth: u32 },
+  Recoverable { height: u64, depth: u64 },
   Unrecoverable,
 }
 
@@ -19,14 +19,14 @@ impl fmt::Display for ReorgError {
 
 impl std::error::Error for ReorgError {}
 
-const MAX_SAVEPOINTS: u32 = 2;
-const SAVEPOINT_INTERVAL: u32 = 10;
-const CHAIN_TIP_DISTANCE: u32 = 21;
+const MAX_SAVEPOINTS: u64 = 2;
+const SAVEPOINT_INTERVAL: u64 = 10;
+const CHAIN_TIP_DISTANCE: u64 = 21;
 
 pub(crate) struct Reorg {}
 
 impl Reorg {
-  pub(crate) fn detect_reorg(block: &BlockData, height: u32, index: &Index) -> Result {
+  pub(crate) fn detect_reorg(block: &BlockData, height: u64, index: &Index) -> Result {
     let bitcoind_prev_blockhash = block.header.prev_blockhash;
 
     match index.block_hash(height.checked_sub(1))? {
@@ -78,20 +78,17 @@ impl Reorg {
     Ok(())
   }
 
-  pub(crate) fn update_savepoints(index: &Index, height: u32) -> Result {
+  pub(crate) fn update_savepoints(index: &Index, height: u64) -> Result {
     if let redb::Durability::None = index.durability {
       return Ok(());
     }
 
     if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
-      && u32::try_from(
+      && 
         index
-          .options
-          .bitcoin_rpc_client()?
+          .client
           .get_blockchain_info()?
-          .headers,
-      )
-      .unwrap()
+          .headers
       .saturating_sub(height)
         <= CHAIN_TIP_DISTANCE
     {

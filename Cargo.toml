@@ -10,8 +10,6 @@ repository = "https://github.com/apezord/ord-dogecoin"
 autobins = false
 rust-version = "1.67"
 
-[workspace]
-members = [".", "test-bitcoincore-rpc"]
 
 [dependencies]
 anyhow = { version = "1.0.56", features = ["backtrace"] }
@@ -53,6 +51,7 @@ serde = { version = "1.0.137", features = ["derive"] }
 serde_json = { version = "1.0.81" }
 serde_yaml = "0.9.17"
 sys-info = "0.9.1"
+sysinfo = "0.29.2"
 tempfile = "3.2.0"
 tokio = { version = "1.17.0", features = ["rt-multi-thread"] }
 tokio-stream = "0.1.9"
@@ -63,7 +62,6 @@ tower-http = { version = "0.3.3", features = ["compression-br", "compression-gzi
 executable-path = "1.0.0"
 pretty_assertions = "1.2.1"
 reqwest = { version = "0.11.10", features = ["blocking"] }
-test-bitcoincore-rpc = { path = "test-bitcoincore-rpc" }
 unindent = "0.2.1"
 
 [[bin]]

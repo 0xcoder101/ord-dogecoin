@@ -16,6 +16,7 @@ use {
     blocktime::Blocktime,
     config::Config,
     decimal::Decimal,
+    degree::Degree,
     deserialize_from_str::DeserializeFromStr,
     epoch::Epoch,
     height::Height,
@@ -34,6 +35,7 @@ use {
   bitcoin::{
     consensus::{self, Decodable, Encodable},
     hash_types::BlockHash,
+    blockdata::constants::COIN_VALUE as COIN_VALUE_BITCOIN,
     hashes::Hash,
     Address, Amount, Block, Network, OutPoint, Script, Sequence, Transaction, TxIn, TxOut, Txid,
   },
@@ -68,6 +70,7 @@ use {
   },
   tempfile::TempDir,
   tokio::{runtime::Runtime, task},
+  sysinfo::{System, SystemExt},
 };
 
 pub use crate::{
@@ -117,6 +120,7 @@ pub mod subcommand;
 mod tally;
 mod templates;
 mod wallet;
+mod degree;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
@@ -134,6 +138,11 @@ fn timestamp(seconds: u32) -> DateTime<Utc> {
 }
 
 const INTERRUPT_LIMIT: u64 = 5;
+const DIFFCHANGE_INTERVAL: u64 = bitcoin::blockdata::constants::DIFFCHANGE_INTERVAL as u64;
+const SUBSIDY_HALVING_INTERVAL: u64 =
+  bitcoin::blockdata::constants::SUBSIDY_HALVING_INTERVAL as u64;
+const CYCLE_EPOCHS: u64 = 6;
+const COIN_VALUE: u64 = COIN_VALUE_BITCOIN;
 
 pub fn main() {
   env_logger::init();

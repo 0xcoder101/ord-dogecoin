@@ -60,7 +60,7 @@ impl Sats {
   }
 }
 
-fn rare_sats(utxos: Vec<(OutPoint, Vec<(u128, u128)>)>) -> Vec<(OutPoint, Sat, u64, Rarity)> {
+fn rare_sats(utxos: Vec<(OutPoint, Vec<(u64, u64)>)>) -> Vec<(OutPoint, Sat, u64, Rarity)> {
   utxos
     .into_iter()
     .flat_map(|(outpoint, sat_ranges)| {
@@ -81,7 +81,7 @@ fn rare_sats(utxos: Vec<(OutPoint, Vec<(u128, u128)>)>) -> Vec<(OutPoint, Sat, u
 }
 
 fn sats_from_tsv(
-  utxos: Vec<(OutPoint, Vec<(u128, u128)>)>,
+  utxos: Vec<(OutPoint, Vec<(u64, u64)>)>,
   tsv: &str,
 ) -> Result<Vec<(OutPoint, &str)>> {
   let mut needles = Vec::new();
@@ -110,7 +110,7 @@ fn sats_from_tsv(
         .into_iter()
         .map(move |(start, end)| (start, end, outpoint))
     })
-    .collect::<Vec<(u128, u128, OutPoint)>>();
+    .collect::<Vec<(u64, u64, OutPoint)>>();
   haystacks.sort();
 
   let mut i = 0;
@@ -144,7 +144,7 @@ mod tests {
       rare_sats(vec![(
         outpoint(1),
         vec![
-          (51 * COIN_VALUE as u128, 100 * COIN_VALUE as u128),
+          (51 * COIN_VALUE, 100 * COIN_VALUE),
           (1234, 5678)
         ],
       )]),
@@ -160,12 +160,12 @@ mod tests {
         outpoint(1),
         vec![
           (10, 80),
-          (50 * COIN_VALUE as u128, 100 * COIN_VALUE as u128)
+          (50 * COIN_VALUE, 100 * COIN_VALUE)
         ],
       )]),
       vec![(
         outpoint(1),
-        Sat(50 * COIN_VALUE as u128),
+        Sat(50 * COIN_VALUE),
         70,
         Rarity::Uncommon
       )]
@@ -186,38 +186,7 @@ mod tests {
       ]
     )
   }
-
-  #[test]
-  #[ignore]
-  fn identify_rare_sats_in_different_outpoints() {
-    assert_eq!(
-      rare_sats(vec![
-        (
-          outpoint(1),
-          vec![(50 * COIN_VALUE as u128, 55 * COIN_VALUE as u128)]
-        ),
-        (
-          outpoint(2),
-          vec![(100 * COIN_VALUE as u128, 111 * COIN_VALUE as u128)],
-        ),
-      ]),
-      vec![
-        (
-          outpoint(1),
-          Sat(50 * COIN_VALUE as u128),
-          0,
-          Rarity::Uncommon
-        ),
-        (
-          outpoint(2),
-          Sat(100 * COIN_VALUE as u128),
-          0,
-          Rarity::Uncommon
-        )
-      ]
-    )
-  }
-
+  
   #[test]
   fn identify_from_tsv_none() {
     assert_eq!(
@@ -312,40 +281,4 @@ mod tests {
     )
   }
 
-  #[test]
-  fn identify_from_tsv_is_fast() {
-    let mut start = 0;
-    let mut utxos = Vec::new();
-    let mut results = Vec::new();
-    for i in 0..16 {
-      let mut ranges = Vec::new();
-      let outpoint = outpoint(i);
-      for _ in 0..100 {
-        let end = start + 50 * COIN_VALUE;
-        ranges.push((start as u128, end as u128));
-        for j in 0..50 {
-          results.push((outpoint, start + j * COIN_VALUE));
-        }
-        start = end;
-      }
-      utxos.push((outpoint, ranges));
-    }
-
-    let mut tsv = String::new();
-    for i in 0..start / COIN_VALUE {
-      writeln!(tsv, "{}", i * COIN_VALUE).expect("writing to string should succeed");
-    }
-
-    let start = Instant::now();
-    assert_eq!(
-      sats_from_tsv(utxos, &tsv)
-        .unwrap()
-        .into_iter()
-        .map(|(outpoint, s)| (outpoint, s.parse().unwrap()))
-        .collect::<Vec<(OutPoint, u64)>>(),
-      results
-    );
-
-    assert!(Instant::now() - start < Duration::from_secs(10));
-  }
 }

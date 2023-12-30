@@ -26,7 +26,7 @@ pub(super) struct InscriptionUpdater<'a, 'db, 'tx> {
   number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
   outpoint_to_value: &'a mut Table<'db, 'tx, &'static OutPointValue, u64>,
   reward: u64,
-  sat_to_inscription_id: &'a mut Table<'db, 'tx, u128, &'static InscriptionIdValue>,
+  sat_to_inscription_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
   satpoint_to_id: &'a mut Table<'db, 'tx, &'static SatPointValue, &'static InscriptionIdValue>,
   timestamp: u32,
   value_cache: &'a mut HashMap<OutPoint, u64>,
@@ -44,16 +44,16 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     lost_sats: u64,
     number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
     outpoint_to_value: &'a mut Table<'db, 'tx, &'static OutPointValue, u64>,
-    sat_to_inscription_id: &'a mut Table<'db, 'tx, u128, &'static InscriptionIdValue>,
+    sat_to_inscription_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
     satpoint_to_id: &'a mut Table<'db, 'tx, &'static SatPointValue, &'static InscriptionIdValue>,
     timestamp: u32,
     value_cache: &'a mut HashMap<OutPoint, u64>,
   ) -> Result<Self> {
     let next_number = number_to_id
       .iter()?
-      .rev()
+      .next_back()
+      .and_then(|result| result.ok())
       .map(|(number, _id)| number.value() + 1)
-      .next()
       .unwrap_or(0);
 
     Ok(Self {
@@ -81,7 +81,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     &mut self,
     tx: &Transaction,
     txid: Txid,
-    input_sat_ranges: Option<&VecDeque<(u128, u128)>>,
+    input_sat_ranges: Option<&VecDeque<(u64, u64)>>,
   ) -> Result<u64> {
     let mut inscriptions = Vec::new();
 
@@ -279,7 +279,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
 
   fn update_inscription_location(
     &mut self,
-    input_sat_ranges: Option<&VecDeque<(u128, u128)>>,
+    input_sat_ranges: Option<&VecDeque<(u64, u64)>>,
     flotsam: Flotsam,
     new_satpoint: SatPoint,
   ) -> Result {
@@ -299,8 +299,8 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           let mut offset = 0;
           for (start, end) in input_sat_ranges {
             let size = end - start;
-            if offset + size > flotsam.offset as u128 {
-              let n = start + flotsam.offset as u128 - offset;
+            if offset + size > flotsam.offset {
+              let n = start + flotsam.offset - offset;
               self.sat_to_inscription_id.insert(&n, &inscription_id)?;
               sat = Some(Sat(n));
               break;

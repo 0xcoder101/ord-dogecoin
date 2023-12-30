@@ -17,7 +17,7 @@ impl Height {
     let epoch_starting_sat = epoch.starting_sat();
     let epoch_starting_height = epoch.starting_height();
     epoch_starting_sat
-      + ((self - epoch_starting_height.n()).n() as u128) * (epoch.subsidy() as u128)
+      + ((self - epoch_starting_height.n()).n() as u64) * (epoch.subsidy() as u64)
   }
 }
 
