@@ -19,7 +19,7 @@ impl fmt::Display for ReorgError {
 
 impl std::error::Error for ReorgError {}
 
-const MAX_SAVEPOINTS: u64 = 2;
+const MAX_SAVEPOINTS: usize = 2;
 const SAVEPOINT_INTERVAL: u64 = 10;
 const CHAIN_TIP_DISTANCE: u64 = 21;
 
@@ -33,13 +33,13 @@ impl Reorg {
       Some(index_prev_blockhash) if index_prev_blockhash == bitcoind_prev_blockhash => Ok(()),
       Some(index_prev_blockhash) if index_prev_blockhash != bitcoind_prev_blockhash => {
         let max_recoverable_reorg_depth =
-          (MAX_SAVEPOINTS - 1) * SAVEPOINT_INTERVAL + height % SAVEPOINT_INTERVAL;
+          (MAX_SAVEPOINTS as u64 - 1) * SAVEPOINT_INTERVAL + height % SAVEPOINT_INTERVAL;
 
         for depth in 1..max_recoverable_reorg_depth {
           let index_block_hash = index.block_hash(height.checked_sub(depth))?;
           let bitcoind_block_hash = index
             .client
-            .get_block_hash(u64::from(height.saturating_sub(depth)))
+            .get_block_hash(height.saturating_sub(depth))
             .into_option()?;
 
           if index_block_hash == bitcoind_block_hash {
@@ -53,7 +53,7 @@ impl Reorg {
     }
   }
 
-  pub(crate) fn handle_reorg(index: &Index, height: u32, depth: u32) -> Result {
+  pub(crate) fn handle_reorg(index: &Index, height: u64, depth: u64) -> Result {
     log::info!("rolling back database after reorg of depth {depth} at height {height}");
 
     if let redb::Durability::None = index.durability {
@@ -84,19 +84,18 @@ impl Reorg {
     }
 
     if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
-      && 
-        index
-          .client
-          .get_blockchain_info()?
-          .headers
-      .saturating_sub(height)
+      && index
+        .client
+        .get_blockchain_info()?
+        .headers
+        .saturating_sub(height)
         <= CHAIN_TIP_DISTANCE
     {
       let wtx = index.begin_write()?;
 
       let savepoints = wtx.list_persistent_savepoints()?.collect::<Vec<u64>>();
 
-      if savepoints.len() >= usize::try_from(MAX_SAVEPOINTS).unwrap() {
+      if savepoints.len() >= MAX_SAVEPOINTS {
         wtx.delete_persistent_savepoint(savepoints.into_iter().min().unwrap())?;
       }
 

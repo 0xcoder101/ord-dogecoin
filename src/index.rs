@@ -69,6 +69,7 @@ pub(crate) struct Index {
   height_limit: Option<u64>,
   reorged: AtomicBool,
   rpc_url: String,
+  unrecoverably_reorged: AtomicBool
 }
 
 #[derive(Debug, PartialEq)]
@@ -279,6 +280,7 @@ impl Index {
       height_limit: options.height_limit,
       reorged: AtomicBool::new(false),
       rpc_url,
+      unrecoverably_reorged: AtomicBool::new(false)
     })
   }
 
@@ -429,21 +431,21 @@ impl Index {
         Ok(ok) => return Ok(ok),
         Err(err) => {
           log::info!("{}", err.to_string());
-          return Err(err)
-          // match err.downcast_ref() {
-          //   Some(&ReorgError::Recoverable { height, depth }) => {
-          //     Reorg::handle_reorg(self, height, depth)?;
 
-          //     updater = Updater::new(self)?;
-          //   }
-          //   Some(&ReorgError::Unrecoverable) => {
-          //     self
-          //       .unrecoverably_reorged
-          //       .store(true, atomic::Ordering::Relaxed);
-          //     return Err(anyhow!(ReorgError::Unrecoverable));
-          //   }
-          //   _ => return Err(err),
-          // };
+          match err.downcast_ref() {
+            Some(&ReorgError::Recoverable { height, depth }) => {
+              Reorg::handle_reorg(self, height, depth)?;
+
+              updater = Updater::new(self)?;
+            }
+            Some(&ReorgError::Unrecoverable) => {
+              self
+                .unrecoverably_reorged
+                .store(true, atomic::Ordering::Relaxed);
+              return Err(anyhow!(ReorgError::Unrecoverable));
+            }
+            _ => return Err(err),
+          };
         }
       }
     }
@@ -491,6 +493,11 @@ impl Index {
       .unwrap()
       .map(|x| x.value())
       .unwrap_or(0)
+  }
+
+  // shaneson: TODO
+  pub(crate) fn is_unrecoverably_reorged(&self) -> bool {
+    self.unrecoverably_reorged.load(atomic::Ordering::Relaxed)
   }
 
   pub(crate) fn height(&self) -> Result<Option<Height>> {

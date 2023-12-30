@@ -142,6 +142,12 @@ impl<'index> Updater<'_> {
           )?;
       }
 
+      // new ordinals logic
+      if SHUTTING_DOWN.load(atomic::Ordering::Relaxed) {
+        break;
+      }
+
+      // old oridinals logic
       if INTERRUPTS.load(atomic::Ordering::Relaxed) > 0 {
         break;
       }
