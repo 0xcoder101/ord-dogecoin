@@ -6,7 +6,7 @@ use {super::*, bitcoincore_rpc::Auth};
     .required(false)
     .args(&["chain-argument", "signet", "regtest", "testnet"]),
 ))]
-pub(crate) struct Options {
+pub(crate) struct   Options {
   #[clap(long, help = "Load Dogecoin Core data dir from <DOGECOIN_DATA_DIR>.")]
   pub(crate) dogecoin_data_dir: Option<PathBuf>,
   #[clap(
@@ -39,15 +39,17 @@ pub(crate) struct Options {
   pub(crate) regtest: bool,
   #[clap(long, help = "Connect to Dogecoin Core RPC at <RPC_URL>.")]
   pub(crate) rpc_url: Option<String>,
+  #[clap(long, help = "Connect to Dogecoin with username.")]
+  pub(crate) rpc_username: Option<String>,
+  #[clap(long, help = "Connect to Dogecoin with password.")]
+  pub(crate) rpc_password: Option<String>,
   #[clap(long, short, help = "Use signet. Equivalent to `--chain signet`.")]
   pub(crate) signet: bool,
   #[clap(long, short, help = "Use testnet. Equivalent to `--chain testnet`.")]
   pub(crate) testnet: bool,
   #[clap(long, default_value = "ord", help = "Use wallet named <WALLET>.")]
-  pub(crate) wallet: String,  #[clap(
-    long,
-    help = "Set index cache to <DB_CACHE_SIZE> bytes. By default takes 1/4 of available RAM."
-  )]
+  pub(crate) wallet: String,  
+  #[clap(long, help = "Set index cache to <DB_CACHE_SIZE> bytes. By default takes 1/4 of available RAM.")]  
   pub(crate) db_cache_size: Option<usize>
 }
 
@@ -84,6 +86,14 @@ impl Options {
         self.wallet
       )
     })
+  }
+
+  pub(crate) fn get_rpc_username(&self) -> String {
+    self.rpc_username.clone().unwrap()
+  }
+
+  pub(crate) fn get_rpc_password(&self) -> String {
+    self.rpc_password.clone().unwrap()
   }
 
   pub(crate) fn cookie_file(&self) -> Result<PathBuf> {

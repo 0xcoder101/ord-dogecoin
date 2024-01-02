@@ -150,30 +150,32 @@ impl<T> BitcoinCoreRpcResultExt<T> for Result<T, bitcoincore_rpc::Error> {
 impl Index {
   pub(crate) fn open(options: &Options) -> Result<Self> {
     let rpc_url = options.rpc_url();
-    let cookie_file = options.cookie_file()?;
+    let rpc_username = options.get_rpc_username();
+    let rpc_password = options.get_rpc_password();
 
-    log::info!(
-      "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
-      cookie_file.display()
-    );
+    log::info!("Connecting to Dogecoin Core RPC server at {rpc_url} with username: {rpc_username} and password {rpc_password}");
+
+    let auth = Auth::UserPass(rpc_username, rpc_password);
+    let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
     log::info!("connect Dogecoin success!");
 
-    let auth = Auth::CookieFile(cookie_file);
-
-    let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
-
     let data_dir = options.data_dir()?;
-
     if let Err(err) = fs::create_dir_all(&data_dir) {
       bail!("failed to create data dir `{}`: {err}", data_dir.display());
     }
-
+    
     let path = if let Some(path) = &options.index {
       path.clone()
     } else {
       data_dir.join("index.redb")
     };
 
+    if let Err(err) = fs::create_dir_all(path.parent().unwrap()) {
+      bail!(
+        "failed to create data dir `{}`: {err}",
+        path.parent().unwrap().display()
+      );
+    }
 
     let db_cache_size = match options.db_cache_size {
       Some(db_cache_size) => db_cache_size,
@@ -185,11 +187,14 @@ impl Index {
     };
 
     log::info!("Setting DB cache size to {} bytes", db_cache_size);
+
     let database = match Database::builder()
       .set_cache_size(db_cache_size)
       .open(&path)
     {
       Ok(database) => {
+        log::info!("open database success");
+
         let schema_version = database
           .begin_read()?
           .open_table(STATISTIC_TO_COUNT)?
@@ -214,7 +219,9 @@ impl Index {
 
         database
       }
-      Err(_) => {        
+      Err(_) => {       
+        log::info!("open database fail. create one.");
+ 
         let database = Database::builder()
           .set_cache_size(db_cache_size)
           .create(&path)?;
@@ -256,7 +263,6 @@ impl Index {
 
         database
       }
-      Err(error) => return Err(error.into()),
     };
 
     let genesis_block_coinbase_transaction =
