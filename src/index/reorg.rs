@@ -26,6 +26,7 @@ const CHAIN_TIP_DISTANCE: u64 = 21;
 pub(crate) struct Reorg {}
 
 impl Reorg {
+
   pub(crate) fn detect_reorg(block: &BlockData, height: u64, index: &Index) -> Result {
     let bitcoind_prev_blockhash = block.header.prev_blockhash;
 
@@ -53,6 +54,8 @@ impl Reorg {
     }
   }
 
+
+  
   pub(crate) fn handle_reorg(index: &Index, height: u64, depth: u64) -> Result {
     log::info!("rolling back database after reorg of depth {depth} at height {height}");
 

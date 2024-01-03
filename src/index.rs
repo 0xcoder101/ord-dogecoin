@@ -1,5 +1,5 @@
 use crate::inscription::ParsedInscription;
-use std::io::Cursor;
+use std::{io::Cursor, option};
 
 use {
   self::{
@@ -158,13 +158,14 @@ impl<T> BitcoinCoreRpcResultExt<T> for Result<T, bitcoincore_rpc::Error> {
 impl Index {
   pub(crate) fn open(options: &Options) -> Result<Self> {
     let rpc_url = options.rpc_url();
-    let rpc_username = options.get_rpc_username();
-    let rpc_password = options.get_rpc_password();
+    
+    // let rpc_username = options.get_rpc_username();
+    // let rpc_password = options.get_rpc_password();
+    // log::info!("Connecting to Dogecoin Core RPC server at {rpc_url} with username: {rpc_username} and password {rpc_password}");
+    // let auth = Auth::UserPass(rpc_username, rpc_password);
+    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
 
-    log::info!("Connecting to Dogecoin Core RPC server at {rpc_url} with username: {rpc_username} and password {rpc_password}");
-
-    let auth = Auth::UserPass(rpc_username, rpc_password);
-    let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
+    let auth = options.dogecoin_rpc_client()?;
     log::info!("connect Dogecoin success!");
 
     let data_dir = options.data_dir()?;
@@ -622,25 +623,6 @@ impl Index {
     self.client.get_block_header_info(&hash).into_option()
   }
 
-  // pub(crate) fn get_block_by_height(&self, height: u64) -> Result<Option<Block>> {
-  //   let tx = self.database.begin_read()?;
-
-  //   let indexed = tx.open_table(HEIGHT_TO_BLOCK_HASH)?.get(&height)?.is_some();
-
-  //   if !indexed {
-  //     return Ok(None);
-  //   }
-
-  //   Ok(
-  //     self
-  //       .client
-  //       .get_block_hash(height)
-  //       .into_option()?
-  //       .map(|hash| self.client.get_block(&hash))
-  //       .transpose()?,
-  //   )
-  // }
-
   pub(crate) fn get_block_by_height(&self, height: u64) -> Result<Option<Block>> {
     Ok(
       self
@@ -651,24 +633,6 @@ impl Index {
         .transpose()?,
     )
   }
-
-  // update shaneson
-  // pub(crate) fn get_block_by_hash(&self, hash: BlockHash) -> Result<Option<Block>> {
-  //   let tx = self.database.begin_read()?;
-
-  //   // check if the given hash exists as a value in the database
-  //   let indexed = tx
-  //     .open_table(HEIGHT_TO_BLOCK_HASH)?
-  //     .range(0..)?
-  //     .rev()
-  //     .any(|(_, block_hash)| block_hash.value() == hash.as_inner());
-
-  //   if !indexed {
-  //     return Ok(None);
-  //   }
-
-  //   self.client.get_block(&hash).into_option()
-  // }
 
   pub(crate) fn get_block_by_hash(&self, hash: BlockHash) -> Result<Option<Block>> {
     self.client.get_block(&hash).into_option()
