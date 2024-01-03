@@ -16,6 +16,11 @@ use {
   bitcoincore_rpc::{json::GetBlockHeaderResult, Auth, Client},
   chrono::SubsecRound,
   indicatif::{ProgressBar, ProgressStyle},
+  okx::{
+    datastore::{
+      ord::{self, redb::try_init_tables as try_init_ord, DataStoreReadOnly}
+    }
+  },
   log::log_enabled,
   redb::{
     Database, DatabaseError, MultimapTable, MultimapTableDefinition, MultimapTableHandle,
@@ -37,7 +42,7 @@ const SCHEMA_VERSION: u64 = 3;
 
 macro_rules! define_table {
   ($name:ident, $key:ty, $value:ty) => {
-    const $name: TableDefinition<$key, $value> = TableDefinition::new(stringify!($name));
+    pub const $name: TableDefinition<$key, $value> = TableDefinition::new(stringify!($name));
   };
 }
 
@@ -56,6 +61,9 @@ define_table! { SAT_TO_INSCRIPTION_ID, u64, &InscriptionIdValue }
 define_table! { SAT_TO_SATPOINT, u64, &SatPointValue }
 define_table! { STATISTIC_TO_COUNT, u64, u64 }
 define_table! { WRITE_TRANSACTION_STARTING_BLOCK_COUNT_TO_TIMESTAMP, u64, u128 }
+
+define_table! { OUTPOINT_TO_ENTRY, &OutPointValue, &[u8] }
+
 
 pub(crate) struct Index {
   auth: Auth,
@@ -251,6 +259,10 @@ impl Index {
         tx.open_table(SAT_TO_SATPOINT)?;
         tx.open_table(WRITE_TRANSACTION_STARTING_BLOCK_COUNT_TO_TIMESTAMP)?;
 
+        // shaneson add
+        tx.open_table(OUTPOINT_TO_ENTRY)?;
+        
+
         tx.open_table(STATISTIC_TO_COUNT)?
           .insert(&Statistic::Schema.key(), &SCHEMA_VERSION)?;
 
@@ -331,6 +343,18 @@ impl Index {
     }
 
     Ok(utxos)
+  }
+
+  // shaneson add
+  pub(crate) fn get_outpoint_entry(&self, outpoint: OutPoint) -> Result<Option<TxOut>> {
+    Ok(
+      self
+        .database
+        .begin_read()?
+        .open_table(OUTPOINT_TO_ENTRY)?
+        .get(&outpoint.store())?
+        .map(|x| Decodable::consensus_decode(&mut io::Cursor::new(x.value())).unwrap()),
+    )
   }
 
   pub(crate) fn get_unspent_output_ranges(
@@ -758,6 +782,29 @@ impl Index {
       .into_iter()
       .map(|(_satpoint, inscription_id)| inscription_id)
       .collect(),
+    )
+  }
+
+  // shaneson add
+  pub(crate) fn transaction_output_by_outpoint(
+    outpoint_to_entry: &impl ReadableTable<&'static OutPointValue, &'static [u8]>,
+    outpoint: OutPoint,
+  ) -> Result<Option<TxOut>> {
+    Ok(
+      outpoint_to_entry
+        .get(&outpoint.store())?
+        .map(|x| Decodable::consensus_decode(&mut io::Cursor::new(x.value())).unwrap()),
+    )
+  }
+
+  // shaneson add
+  pub(crate) fn get_transaction_output_by_outpoint(
+    &self,
+    outpoint: OutPoint,
+  ) -> Result<Option<TxOut>> {
+    Self::transaction_output_by_outpoint(
+      &self.database.begin_read()?.open_table(OUTPOINT_TO_ENTRY)?,
+      outpoint,
     )
   }
 

@@ -121,6 +121,8 @@ mod tally;
 mod templates;
 mod wallet;
 mod degree;
+mod okx;
+
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 

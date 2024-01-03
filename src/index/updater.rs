@@ -336,6 +336,9 @@ impl<'index> Updater<'_> {
 
     let mut outpoint_to_value = wtx.open_table(OUTPOINT_TO_VALUE)?;
 
+    // shaneson add
+    let mut outpoint_to_entry = wtx.open_table(OUTPOINT_TO_ENTRY)?;
+
     let index_inscriptions = self.height >= index.first_inscription_height;
 
     if index_inscriptions {
@@ -366,6 +369,12 @@ impl<'index> Updater<'_> {
           if outpoint_to_value.get(&prev_output.store())?.is_some() {
             continue;
           }
+
+          // okx has the some logic, we keep the same
+          if outpoint_to_entry.get(&prev_output.store())?.is_some() {
+            continue;
+          }
+
           // We don't know the value of this tx input. Send this outpoint to background thread to be fetched
           outpoint_sender.blocking_send(prev_output)?;
         }
