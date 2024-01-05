@@ -9,7 +9,7 @@ use {
 pub struct InscriptionOp {
   pub txid: Txid,
   pub action: Action,
-  pub inscription_number: Option<i64>,
+  pub inscription_number: Option<u64>,
   pub inscription_id: InscriptionId,
   pub old_satpoint: SatPoint,
   pub new_satpoint: Option<SatPoint>,

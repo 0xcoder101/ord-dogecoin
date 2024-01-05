@@ -3,6 +3,7 @@ use {
   bitcoin::{
     blockdata::{opcodes, script},
     Script,
+    Witness
   },
   std::str,
 };
@@ -13,6 +14,13 @@ const PROTOCOL_ID: &[u8] = b"ord";
 pub(crate) struct Inscription {
   body: Option<Vec<u8>>,
   content_type: Option<Vec<u8>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) struct TransactionInscription {
+  pub(crate) inscription: Inscription,
+  pub(crate) tx_in_index: u32,
+  pub(crate) tx_in_offset: u32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -129,6 +137,7 @@ impl Inscription {
 struct InscriptionParser {}
 
 impl InscriptionParser {
+
   fn parse(sig_scripts: Vec<Script>) -> ParsedInscription {
     let sig_script = &sig_scripts[0];
 

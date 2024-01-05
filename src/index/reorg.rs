@@ -53,8 +53,6 @@ impl Reorg {
       _ => Ok(()),
     }
   }
-
-
   
   pub(crate) fn handle_reorg(index: &Index, height: u64, depth: u64) -> Result {
     log::info!("rolling back database after reorg of depth {depth} at height {height}");
@@ -67,7 +65,10 @@ impl Reorg {
 
     let oldest_savepoint =
       wtx.get_persistent_savepoint(wtx.list_persistent_savepoints()?.min().unwrap())?;
-
+    
+    // shaneson error detect: 
+    // thread '<unnamed>' panicked at src/index/reorg.rs:69:76:
+    // called `Option::unwrap()` on a `None` value
     wtx.restore_savepoint(&oldest_savepoint)?;
 
     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;

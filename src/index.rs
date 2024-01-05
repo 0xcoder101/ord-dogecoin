@@ -4,8 +4,7 @@ use std::{io::Cursor, option};
 use {
   self::{
     entry::{
-      HeaderValue, Entry, InscriptionEntry, InscriptionEntryValue, InscriptionIdValue,
-      OutPointValue, SatPointValue, SatRange,
+      HeaderValue, Entry, InscriptionIdValue, OutPointValue, SatPointValue, SatRange,
     },
     reorg::*,
     updater::Updater,
@@ -13,7 +12,7 @@ use {
   super::*,
   crate::wallet::Wallet,
   bitcoin::BlockHeader,
-  bitcoincore_rpc::{json::GetBlockHeaderResult, Auth, Client},
+  bitcoincore_rpc::{json::{GetBlockHeaderResult, GetBlockResult}, Auth, Client, },
   chrono::SubsecRound,
   indicatif::{ProgressBar, ProgressStyle},
   okx::{
@@ -30,6 +29,11 @@ use {
   // redb::{Database, ReadableTable, Table, TableDefinition, WriteStrategy, WriteTransaction, Savepoint},
   std::collections::HashMap,
   std::sync::atomic::{self, AtomicBool},
+};
+
+pub(super) use self::{
+  entry::{InscriptionEntry, InscriptionEntryValue},
+  updater::BlockData,
 };
 
 mod entry;
@@ -77,7 +81,8 @@ pub(crate) struct Index {
   height_limit: Option<u64>,
   reorged: AtomicBool,
   rpc_url: String,
-  unrecoverably_reorged: AtomicBool
+  unrecoverably_reorged: AtomicBool,
+  options: Options,
 }
 
 #[derive(Debug, PartialEq)]
@@ -156,13 +161,13 @@ impl<T> BitcoinCoreRpcResultExt<T> for Result<T, bitcoincore_rpc::Error> {
 }
 
 impl Index {
+
   pub(crate) fn open(options: &Options) -> Result<Self> {
     let cookie_file = options
       .cookie_file()
       .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
 
     let rpc_url = options.rpc_url();
-
     log::info!(
       "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
       cookie_file.display()
@@ -302,7 +307,8 @@ impl Index {
       height_limit: options.height_limit,
       reorged: AtomicBool::new(false),
       rpc_url,
-      unrecoverably_reorged: AtomicBool::new(false)
+      unrecoverably_reorged: AtomicBool::new(false),
+      options: options.clone(),
     })
   }
 
@@ -407,15 +413,6 @@ impl Index {
         .get(&Statistic::OutputsTraversed.key())?
         .map(|x| x.value())
         .unwrap_or(0);
-
-      // shaneson update
-      // let _block_indexed = wtx
-      //   .open_table(HEIGHT_TO_BLOCK_HASH)?
-      //   .range(0..)?
-      //   .rev()
-      //   .next()
-      //   .map(|(height, _hash)| height.value() + 1)
-      //   .unwrap_or(0);
       
       let _block_indexed = wtx
         .open_table(HEIGHT_TO_BLOCK_HEADER)?
@@ -455,6 +452,52 @@ impl Index {
     };
 
     Ok(info)
+  }
+
+  pub(crate) fn ord_get_txs_inscriptions(
+      &self,
+      txs: &Vec<Txid>,
+  ) -> Result<Vec<(bitcoin::Txid, Vec<ord::InscriptionOp>)>> {
+      let rtx = self.database.begin_read()?;
+      let ord_db = ord::OrdDbReader::new(&rtx);
+      let mut result = Vec::new();
+      for txid in txs {
+        let inscriptions = ord_db.get_transaction_operations(txid)?;
+        if inscriptions.is_empty() {
+          continue;
+        }
+        result.push((*txid, inscriptions));
+      }
+      Ok(result)
+  }
+
+
+  pub(crate) fn get_block_info_by_hash(&self, hash: BlockHash) -> Result<Option<GetBlockResult>> {
+    self.client.get_block_info(&hash).into_option()
+  }
+
+  pub(crate) fn ord_txid_inscriptions(
+    &self,
+    txid: &Txid,
+  ) -> Result<Option<Vec<ord::InscriptionOp>>> {
+    let rtx = self.database.begin_read().unwrap();
+    let ord_db = ord::OrdDbReader::new(&rtx);
+    let res = ord_db.get_transaction_operations(txid)?;
+
+    if res.is_empty() {
+      let tx = self.client.get_raw_transaction_info(txid)?;
+      if let Some(tx_blockhash) = tx.blockhash {
+        let tx_bh = self.client.get_block_header_info(&tx_blockhash)?;
+        let parsed_height = self.height()?;
+        if parsed_height.is_none() || tx_bh.height as u64 > parsed_height.unwrap().0 {
+          return Ok(None);
+        }
+      } else {
+        return Err(anyhow!("can't get tx block hash: {txid}"));
+      }
+    }
+
+    Ok(Some(res))
   }
 
   pub(crate) fn update(&self) -> Result {
@@ -514,7 +557,6 @@ impl Index {
     Ok(())
   }
 
-
   #[cfg(test)]
   pub(crate) fn statistic(&self, statistic: Statistic) -> u64 {
     self
@@ -534,6 +576,10 @@ impl Index {
     self.unrecoverably_reorged.load(atomic::Ordering::Relaxed)
   }
 
+  pub(crate) fn get_chain_network(&self) -> Network {
+    self.options.chain().network()
+  }
+
   pub(crate) fn height(&self) -> Result<Option<Height>> {
     self.begin_read()?.block_height()
   }
@@ -545,23 +591,6 @@ impl Index {
   pub(crate) fn block_hash(&self, height: Option<u64>) -> Result<Option<BlockHash>> {
     self.begin_read()?.block_hash(height)
   }
-
-  // shaneson update
-  // pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
-  //   let mut blocks = Vec::new();
-
-  //   let rtx = self.begin_read()?;
-
-  //   let block_count = rtx.block_count()?;
-
-  //   let height_to_block_hash = rtx.0.open_table(HEIGHT_TO_BLOCK_HASH)?;
-
-  //   for next in height_to_block_hash.range(0..block_count)?.rev().take(take) {
-  //     blocks.push((next.0.value(), Entry::load(*next.1.value())));
-  //   }
-
-  //   Ok(blocks)
-  // }
 
   pub(crate) fn blocks(&self, take: usize) -> Result<Vec<(u64, BlockHash)>> {
     let rtx = self.begin_read()?;
@@ -652,10 +681,7 @@ impl Index {
     )
   }
 
-  pub(crate) fn get_inscription_id_by_inscription_number(
-    &self,
-    n: u64,
-  ) -> Result<Option<InscriptionId>> {
+  pub(crate) fn get_inscription_id_by_inscription_number(&self, n: u64) -> Result<Option<InscriptionId>> {
     Ok(
       self
         .database
@@ -666,10 +692,7 @@ impl Index {
     )
   }
 
-  pub(crate) fn get_inscription_satpoint_by_id(
-    &self,
-    inscription_id: InscriptionId,
-  ) -> Result<Option<SatPoint>> {
+  pub(crate) fn get_inscription_satpoint_by_id(&self, inscription_id: InscriptionId) -> Result<Option<SatPoint>> {
     Ok(
       self
         .database
@@ -680,10 +703,7 @@ impl Index {
     )
   }
 
-  pub(crate) fn get_inscription_by_id(
-    &self,
-    inscription_id: InscriptionId,
-  ) -> Result<Option<Inscription>> {
+  pub(crate) fn get_inscription_by_id(&self, inscription_id: InscriptionId) -> Result<Option<Inscription>> {
     if self
       .database
       .begin_read()?
@@ -734,10 +754,7 @@ impl Index {
     }
   }
 
-  pub(crate) fn get_inscriptions_on_output(
-    &self,
-    outpoint: OutPoint,
-  ) -> Result<Vec<InscriptionId>> {
+  pub(crate) fn get_inscriptions_on_output(&self, outpoint: OutPoint) -> Result<Vec<InscriptionId>> {
     Ok(
       Self::inscriptions_on_output(
         &self
@@ -773,6 +790,10 @@ impl Index {
       &self.database.begin_read()?.open_table(OUTPOINT_TO_ENTRY)?,
       outpoint,
     )
+  }
+
+  pub(crate) fn latest_block(&self) -> Result<Option<(Height, BlockHash)>> {
+    self.begin_read()?.latest_block()
   }
 
   pub(crate) fn get_transaction(&self, txid: Txid) -> Result<Option<Transaction>> {
@@ -881,15 +902,6 @@ impl Index {
       Some(block) => Ok(Blocktime::confirmed(block.header.time)),
       None => {
         let tx = self.database.begin_read()?;
-        // update shaneson
-        // let current = tx
-        //   .open_table(HEIGHT_TO_BLOCK_HASH)?
-        //   .range(0..)?
-        //   .rev()
-        //   .next()
-        //   .map(|(height, _hash)| height)
-        //   .map(|x| x.value())
-        //   .unwrap_or(0);
 
         let current = tx.open_table(HEIGHT_TO_BLOCK_HEADER)?
           .range(0..)?
@@ -912,6 +924,21 @@ impl Index {
             .ok_or_else(|| anyhow!("block timestamp out of range"))?,
         ))
       }
+    }
+  }
+
+  // shaneson add
+  pub(crate) fn get_transaction_info(
+    &self,
+    txid: &bitcoin::Txid,
+  ) -> Result<Option<bitcoincore_rpc::json::GetRawTransactionResult>> {
+    if *txid == self.genesis_block_coinbase_txid {
+      Ok(None)
+    } else {
+      self
+        .client
+        .get_raw_transaction_info(txid)
+        .into_option()
     }
   }
 
@@ -1034,75 +1061,6 @@ impl Index {
     )
   }
 
-  #[cfg(test)]
-  fn assert_inscription_location(
-    &self,
-    inscription_id: InscriptionId,
-    satpoint: SatPoint,
-    sat: u64,
-  ) {
-    let rtx = self.database.begin_read().unwrap();
-
-    let satpoint_to_inscription_id = rtx.open_table(SATPOINT_TO_INSCRIPTION_ID).unwrap();
-
-    let inscription_id_to_satpoint = rtx.open_table(INSCRIPTION_ID_TO_SATPOINT).unwrap();
-
-    assert_eq!(
-      satpoint_to_inscription_id.len().unwrap(),
-      inscription_id_to_satpoint.len().unwrap(),
-    );
-
-    assert_eq!(
-      SatPoint::load(
-        *inscription_id_to_satpoint
-          .get(&inscription_id.store())
-          .unwrap()
-          .unwrap()
-          .value()
-      ),
-      satpoint,
-    );
-
-    assert_eq!(
-      InscriptionId::load(
-        *satpoint_to_inscription_id
-          .get(&satpoint.store())
-          .unwrap()
-          .unwrap()
-          .value()
-      ),
-      inscription_id,
-    );
-
-    if self.has_sat_index().unwrap() {
-      assert_eq!(
-        InscriptionId::load(
-          *rtx
-            .open_table(SAT_TO_INSCRIPTION_ID)
-            .unwrap()
-            .get(&sat)
-            .unwrap()
-            .unwrap()
-            .value()
-        ),
-        inscription_id,
-      );
-
-      assert_eq!(
-        SatPoint::load(
-          *rtx
-            .open_table(SAT_TO_SATPOINT)
-            .unwrap()
-            .get(&sat)
-            .unwrap()
-            .unwrap()
-            .value()
-        ),
-        satpoint,
-      );
-    }
-  }
-
   // shaneson check
   fn inscriptions_on_output<'a: 'tx, 'tx>(
     satpoint_to_id: &'a impl ReadableTable<&'static SatPointValue, &'static InscriptionIdValue>,
@@ -1129,4 +1087,5 @@ impl Index {
 
     Ok(sats_and_inscriptions.into_iter())
   }
+
 }

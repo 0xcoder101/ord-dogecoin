@@ -1,9 +1,13 @@
 use super::*;
 use crate::inscription::ParsedInscription;
+use crate::okx::datastore::ord::operation::{Action, InscriptionOp};
+
 
 pub(super) struct Flotsam {
+  txid: Txid,
   inscription_id: InscriptionId,
   offset: u64,
+  old_satpoint: SatPoint,
   origin: Origin,
 }
 
@@ -14,6 +18,7 @@ enum Origin {
 
 pub(super) struct InscriptionUpdater<'a, 'db, 'tx> {
   flotsam: Vec<Flotsam>,
+  pub(super) operations: HashMap<Txid, Vec<InscriptionOp>>,
   height: u64,
   id_to_satpoint: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, &'static SatPointValue>,
   id_to_txids: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, &'static [u8]>,
@@ -21,8 +26,8 @@ pub(super) struct InscriptionUpdater<'a, 'db, 'tx> {
   partial_txid_to_txids: &'a mut Table<'db, 'tx, &'static [u8], &'static [u8]>,
   value_receiver: &'a mut Receiver<u64>,
   id_to_entry: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, InscriptionEntryValue>,
-  lost_sats: u64,
-  next_number: u64,
+  pub(super) lost_sats: u64,
+  pub(super) next_number: u64,
   number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
   outpoint_to_value: &'a mut Table<'db, 'tx, &'static OutPointValue, u64>,
   reward: u64,
@@ -58,6 +63,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
 
     Ok(Self {
       flotsam: Vec::new(),
+      operations: HashMap::new(),
       height,
       id_to_satpoint,
       id_to_txids,
@@ -83,21 +89,29 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     txid: Txid,
     input_sat_ranges: Option<&VecDeque<(u64, u64)>>,
   ) -> Result<u64> {
+    // prepare a vec to build inscriptions
     let mut inscriptions = Vec::new();
 
     let mut input_value = 0;
+    
+    // loop each txInputs
     for tx_in in &tx.input {
       if tx_in.previous_output.is_null() {
         input_value += Height(self.height).subsidy();
       } else {
+        // 拆成 old satpoint 和
         for (old_satpoint, inscription_id) in
           Index::inscriptions_on_output(self.satpoint_to_id, tx_in.previous_output)?
         {
-          inscriptions.push(Flotsam {
-            offset: input_value + old_satpoint.offset,
-            inscription_id,
-            origin: Origin::Old(old_satpoint),
-          });
+          inscriptions.push(
+            Flotsam {
+              txid: txid,
+              inscription_id: inscription_id,
+              offset: input_value + old_satpoint.offset,
+              old_satpoint: old_satpoint,
+              origin: Origin::Old(old_satpoint),
+            }
+          );
         }
 
         input_value += if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
@@ -193,17 +207,22 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
             .id_to_txids
             .insert(&inscription_id, txids_vec.as_slice())?;
 
+          let _txid = Txid::from_slice(&txids_vec[0..32]).unwrap();
           let og_inscription_id = InscriptionId {
-            txid: Txid::from_slice(&txids_vec[0..32]).unwrap(),
+            txid: _txid,
             index: 0
           };
 
+          // TODO: shaneson debug
           inscriptions.push(Flotsam {
+            txid: _txid,
+            old_satpoint: SatPoint {
+              outpoint: tx.input[0].previous_output,
+              offset: 0,
+            },
             inscription_id: og_inscription_id,
             offset: 0,
-            origin: Origin::New(
-              input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>(),
-            ),
+            origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
           });
         }
       }
@@ -326,6 +345,27 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     }
 
     let new_satpoint = new_satpoint.store();
+
+    // shaneson add
+    self
+    .operations
+    .entry(flotsam.txid)
+    .or_default()
+    .push(InscriptionOp {
+      txid: flotsam.txid,
+      inscription_number: self
+        .id_to_entry
+        .get(&flotsam.inscription_id.store())?
+        .map(|entry| InscriptionEntry::load(entry.value()).number),
+      inscription_id: flotsam.inscription_id,
+      action: match flotsam.origin {
+        Origin::Old(_) => Action::Transfer,
+        Origin::New(_)=> Action::New,
+      },
+      old_satpoint: flotsam.old_satpoint,
+      new_satpoint: Some(Entry::load(new_satpoint)),
+    });
+
 
     self.satpoint_to_id.insert(&new_satpoint, &inscription_id)?;
     self.id_to_satpoint.insert(&inscription_id, &new_satpoint)?;

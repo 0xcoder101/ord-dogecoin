@@ -4,6 +4,11 @@ use {
   futures::future::try_join_all,
   std::sync::mpsc,
   tokio::sync::mpsc::{error::TryRecvError, Receiver, Sender},
+
+  crate::okx::{
+    datastore::StateReadWrite,
+    protocol::{BlockContext, ProtocolConfig, ProtocolManager},
+  },
 };
 
 mod inscription_updater;
@@ -537,11 +542,24 @@ impl<'index> Updater<'_> {
         lost_sats += inscription_updater.index_transaction_inscriptions(tx, *txid, None)?;
       }
     }
-
     statistic_to_count.insert(&Statistic::LostSats.key(), &lost_sats)?;
 
+      
+    let operations = inscription_updater.operations.clone();
+
+    // Create a protocol manager to index the block of brc20, brc20s data.
+    let config = ProtocolConfig::new_with_options(&index.options);
+    ProtocolManager::new(&index.client, &StateReadWrite::new(wtx), &config).index_block(
+      BlockContext {
+        network: index.get_chain_network(),
+        blockheight: self.height,
+        blocktime: block.header.time,
+      },
+      &block,
+      operations,
+    )?;
+
     // shaneson update
-    // height_to_block_hash.insert(&self.height, &block.header.block_hash().store())?;
     height_to_block_header.insert(&self.height, &block.header.block_hash().store())?;
 
 

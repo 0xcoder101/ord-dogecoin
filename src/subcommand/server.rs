@@ -1,7 +1,7 @@
 use {
   self::{
     deserialize_from_str::DeserializeFromStr,
-    error::{OptionExt, ServerError, ServerResult},
+    error::{ApiError, OptionExt, ServerError, ServerResult},
   },
   super::*,
   crate::page_config::PageConfig,
@@ -40,6 +40,12 @@ use {
 };
 
 mod error;
+mod ord;
+mod api;
+mod response;
+
+use self::api::*;
+use self::response::ApiResponse;
 
 enum BlockQuery {
   Height(u64),
@@ -150,6 +156,14 @@ impl Server {
         domain: acme_domains.first().cloned(),
       });
 
+      let api_v1_router = Router::new()
+        .route(
+          "/ord/tx/:txid/inscriptions",
+          get(ord::ord_txid_inscriptions),
+        );
+
+      let api_router = Router::new().nest("/v1", api_v1_router);
+
       let router = Router::new()
         .route("/", get(Self::home))
         .route("/block-count", get(Self::block_count))
@@ -180,6 +194,7 @@ impl Server {
         .route("/static/*path", get(Self::static_asset))
         .route("/status", get(Self::status))
         .route("/tx/:txid", get(Self::transaction))
+        .nest("/api", api_router)
         .layer(Extension(index))
         .layer(Extension(page_config))
         .layer(Extension(Arc::new(config)))
