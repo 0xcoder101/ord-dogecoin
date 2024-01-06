@@ -88,6 +88,14 @@ impl Reorg {
       return Ok(());
     }
 
+    log::debug!("shaneson updating {}", 
+        index
+        .client
+        .get_blockchain_info()?
+        .headers
+        .saturating_sub(height)
+    );
+
     if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
       && index
         .client
