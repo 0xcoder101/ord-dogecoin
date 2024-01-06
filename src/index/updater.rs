@@ -119,7 +119,7 @@ impl<'index> Updater<'_> {
 
       uncommitted += 1;
 
-      if uncommitted == 1000 {
+      if uncommitted == 200 {
         self.commit(wtx, value_cache)?;
         value_cache = HashMap::new();
         uncommitted = 0;
