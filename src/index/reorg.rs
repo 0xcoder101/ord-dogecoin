@@ -19,7 +19,7 @@ impl fmt::Display for ReorgError {
 
 impl std::error::Error for ReorgError {}
 
-const MAX_SAVEPOINTS: usize = 2;
+const MAX_SAVEPOINTS: usize = 7;
 const SAVEPOINT_INTERVAL: u64 = 10;
 const CHAIN_TIP_DISTANCE: u64 = 21;
 
@@ -66,9 +66,6 @@ impl Reorg {
     let oldest_savepoint =
       wtx.get_persistent_savepoint(wtx.list_persistent_savepoints()?.min().unwrap())?;
 
-    // shaneson error detect: 
-    // thread '<unnamed>' panicked at src/index/reorg.rs:69:76:
-    // called `Option::unwrap()` on a `None` value
     wtx.restore_savepoint(&oldest_savepoint)?;
 
     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
