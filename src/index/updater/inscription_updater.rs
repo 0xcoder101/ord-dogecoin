@@ -91,6 +91,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
   ) -> Result<u64> {
     // prepare a vec to build inscriptions
     let mut inscriptions = Vec::new();
+    let mut new_flotsam_inscriptions: Vec<Flotsam> = Vec::new();
 
     let mut input_value = 0;
     
@@ -99,7 +100,6 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       if tx_in.previous_output.is_null() {
         input_value += Height(self.height).subsidy();
       } else {
-        // 拆成 old satpoint 和
         for (old_satpoint, inscription_id) in
           Index::inscriptions_on_output(self.satpoint_to_id, tx_in.previous_output)?
         {
@@ -132,102 +132,104 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       }
     }
 
-    if inscriptions.iter().all(|flotsam| flotsam.offset != 0) {
-      let previous_txid = tx.input[0].previous_output.txid;
-      let previous_txid_bytes: [u8; 32] = previous_txid.into_inner();
-      let mut txids_vec = vec![];
 
-      let txs = match self
-        .partial_txid_to_txids
-        .get(&previous_txid_bytes.as_slice())?
-      {
-        Some(partial_txids) => {
-          let txids = partial_txids.value();
-          let mut txs = vec![];
-          txids_vec = txids.to_vec();
-          for i in 0..txids.len() / 32 {
-            let txid = &txids[i * 32..i * 32 + 32];
-            let tx_result = self.txid_to_tx.get(txid)?;
-            let tx_result = tx_result.unwrap();
-            let tx_buf = tx_result.value();
-            let mut cursor = std::io::Cursor::new(tx_buf);
-            let tx = bitcoin::Transaction::consensus_decode(&mut cursor)?;
-            txs.push(tx);
-          }
-          txs.push(tx.clone());
-          txs
-        }
-        None => {
-          vec![tx.clone()]
-        }
-      };
+    for flotsam in inscriptions.iter() {
+      if (flotsam.offset != 0) {
+          let previous_txid = tx.input[0].previous_output.txid;
+          let previous_txid_bytes: [u8; 32] = previous_txid.into_inner();
+          let mut txids_vec = vec![];
 
-      match Inscription::from_transactions(txs) {
-        ParsedInscription::None => {
-          // todo: clean up db
-        }
-
-        ParsedInscription::Partial => {
-          let mut txid_vec = txid.into_inner().to_vec();
-          txids_vec.append(&mut txid_vec);
-
-          self
+          let txs = match self
             .partial_txid_to_txids
-            .remove(&previous_txid_bytes.as_slice())?;
-          self
-            .partial_txid_to_txids
-            .insert(&txid.into_inner().as_slice(), txids_vec.as_slice())?;
-
-          let mut tx_buf = vec![];
-          tx.consensus_encode(&mut tx_buf)?;
-          self
-            .txid_to_tx
-            .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
-        }
-
-        ParsedInscription::Complete(_inscription) => {
-          self
-            .partial_txid_to_txids
-            .remove(&previous_txid_bytes.as_slice())?;
-
-          let mut tx_buf = vec![];
-          tx.consensus_encode(&mut tx_buf)?;
-          self
-            .txid_to_tx
-            .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
-
-          let mut txid_vec = txid.into_inner().to_vec();
-          txids_vec.append(&mut txid_vec);
-
-          let mut inscription_id = [0_u8; 36];
-          unsafe {
-            std::ptr::copy_nonoverlapping(txids_vec.as_ptr(), inscription_id.as_mut_ptr(), 32)
-          }
-          self
-            .id_to_txids
-            .insert(&inscription_id, txids_vec.as_slice())?;
-
-          let _txid = Txid::from_slice(&txids_vec[0..32]).unwrap();
-          let og_inscription_id = InscriptionId {
-            txid: _txid,
-            index: 0
+            .get(&previous_txid_bytes.as_slice())?
+          {
+            Some(partial_txids) => {
+              let txids = partial_txids.value();
+              let mut txs = vec![];
+              txids_vec = txids.to_vec();
+              for i in 0..txids.len() / 32 {
+                let txid = &txids[i * 32..i * 32 + 32];
+                let tx_result = self.txid_to_tx.get(txid)?;
+                let tx_result = tx_result.unwrap();
+                let tx_buf = tx_result.value();
+                let mut cursor = std::io::Cursor::new(tx_buf);
+                let tx = bitcoin::Transaction::consensus_decode(&mut cursor)?;
+                txs.push(tx);
+              }
+              txs.push(tx.clone());
+              txs
+            }
+            None => {
+              vec![tx.clone()]
+            }
           };
 
-          // TODO: shaneson debug
-          inscriptions.push(Flotsam {
-            txid: _txid,
-            old_satpoint: SatPoint {
-              outpoint: tx.input[0].previous_output,
-              offset: 0,
-            },
-            inscription_id: og_inscription_id,
-            offset: 0,
-            origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
-          });
-        }
-      }
-    };
+          match Inscription::from_transactions(txs) {
+            ParsedInscription::None => {
+              // todo: clean up db
+            }
 
+            ParsedInscription::Partial => {
+              let mut txid_vec = txid.into_inner().to_vec();
+              txids_vec.append(&mut txid_vec);
+
+              self
+                .partial_txid_to_txids
+                .remove(&previous_txid_bytes.as_slice())?;
+              self
+                .partial_txid_to_txids
+                .insert(&txid.into_inner().as_slice(), txids_vec.as_slice())?;
+
+              let mut tx_buf = vec![];
+              tx.consensus_encode(&mut tx_buf)?;
+              self
+                .txid_to_tx
+                .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
+            }
+
+            ParsedInscription::Complete(_inscription) => {
+              self
+                .partial_txid_to_txids
+                .remove(&previous_txid_bytes.as_slice())?;
+
+              let mut tx_buf = vec![];
+              tx.consensus_encode(&mut tx_buf)?;
+              self
+                .txid_to_tx
+                .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
+
+              let mut txid_vec = txid.into_inner().to_vec();
+              txids_vec.append(&mut txid_vec);
+
+              let mut inscription_id = [0_u8; 36];
+              unsafe {
+                std::ptr::copy_nonoverlapping(txids_vec.as_ptr(), inscription_id.as_mut_ptr(), 32)
+              }
+              self
+                .id_to_txids
+                .insert(&inscription_id, txids_vec.as_slice())?;
+
+              let _txid = Txid::from_slice(&txids_vec[0..32]).unwrap();
+              let og_inscription_id = InscriptionId {
+                txid: _txid,
+                index: 0
+              };
+
+              // TODO: shaneson debug
+              new_flotsam_inscriptions.push(Flotsam {
+                txid: _txid,
+                old_satpoint: flotsam.old_satpoint,
+                inscription_id: og_inscription_id,
+                offset: 0,
+                origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
+              });  
+            }
+          }
+        }
+    }
+    
+    inscriptions.extend(new_flotsam_inscriptions);
+ 
     let is_coinbase = tx
       .input
       .first()

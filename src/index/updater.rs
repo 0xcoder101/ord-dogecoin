@@ -401,16 +401,6 @@ impl<'index> Updater<'_> {
       time,
       block.txdata.len()
     );
-    
-    // shaneson TODO reorg detected
-    // if let Some(prev_height) = self.height.checked_sub(1) {
-    //   let prev_hash = height_to_block_hash.get(&prev_height)?.unwrap();
-
-    //   if prev_hash.value() != block.header.prev_blockhash.as_ref() {
-    //     index.reorged.store(true, atomic::Ordering::Relaxed);
-    //     return Err(anyhow!("reorg detected at or before {prev_height}"));
-    //   }
-    // }
 
     let mut inscription_id_to_inscription_entry =
       wtx.open_table(INSCRIPTION_ID_TO_INSCRIPTION_ENTRY)?;
