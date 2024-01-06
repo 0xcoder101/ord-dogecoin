@@ -80,6 +80,7 @@ impl Reorg {
   }
 
   pub(crate) fn update_savepoints(index: &Index, height: u64) -> Result {
+    log::debug!("updating savepoints at {}", height);
     if let redb::Durability::None = index.durability {
       return Ok(());
     }
