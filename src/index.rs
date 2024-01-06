@@ -161,19 +161,25 @@ impl<T> BitcoinCoreRpcResultExt<T> for Result<T, bitcoincore_rpc::Error> {
 }
 
 impl Index {
-
   pub(crate) fn open(options: &Options) -> Result<Self> {
-    let cookie_file = options
-      .cookie_file()
-      .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
 
+    // cookie
+    // let cookie_file = options
+    //   .cookie_file()
+    //   .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
+    // let rpc_url = options.rpc_url();
+    // log::info!(
+    //   "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
+    //   cookie_file.display()
+    // );
+    // let auth = Auth::CookieFile(cookie_file);
+    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
+
+    // rpc
     let rpc_url = options.rpc_url();
-    log::info!(
-      "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
-      cookie_file.display()
-    );
-
-    let auth = Auth::CookieFile(cookie_file);
+    let rpc_pass = options.get_rpc_password();
+    let rpc_user = options.get_rpc_username();
+    let auth = Auth::UserPass(rpc_user, rpc_pass);
     let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
 
     let data_dir = options.data_dir()?;
