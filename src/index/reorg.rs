@@ -65,7 +65,7 @@ impl Reorg {
 
     let oldest_savepoint =
       wtx.get_persistent_savepoint(wtx.list_persistent_savepoints()?.min().unwrap())?;
-    
+
     // shaneson error detect: 
     // thread '<unnamed>' panicked at src/index/reorg.rs:69:76:
     // called `Option::unwrap()` on a `None` value
