@@ -21,7 +21,7 @@ impl std::error::Error for ReorgError {}
 
 const MAX_SAVEPOINTS: usize = 7;
 const SAVEPOINT_INTERVAL: u64 = 10;
-const CHAIN_TIP_DISTANCE: u64 = 21;
+const CHAIN_TIP_DISTANCE: u64 = 200;
 
 pub(crate) struct Reorg {}
 
@@ -55,8 +55,6 @@ impl Reorg {
   }
   
   pub(crate) fn handle_reorg(index: &Index, height: u64, depth: u64) -> Result {
-    log::info!("shaneson testing reorg at {depth} at height {height}");
-
     log::info!("rolling back database after reorg of depth {depth} at height {height}");
 
     if let redb::Durability::None = index.durability {
@@ -81,48 +79,36 @@ impl Reorg {
   }
 
   pub(crate) fn update_savepoints(index: &Index, height: u64) -> Result {
-    log::debug!("shaneson checking height {}", height);
 
-    if (height % 50 == 0) {
-      log::debug!("shaneson trying save point, index.durability {:?}", index.durability);
+    if let redb::Durability::None = index.durability {
+      return Ok(());
+    }
+  
+    if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
+      && index.get_chain_height()?.saturating_sub(height)<= CHAIN_TIP_DISTANCE 
+    {
+      log::debug!("Try creating savepoint at height {}", height);
+
       let wtx = index.begin_write()?;
-      wtx.persistent_savepoint()?;
+
+      let savepoints = wtx.list_persistent_savepoints()?.collect::<Vec<u64>>();
+
+      if savepoints.len() >= MAX_SAVEPOINTS {
+        wtx.delete_persistent_savepoint(savepoints.into_iter().min().unwrap())?;
+      }
+
       Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
       wtx.commit()?;
-      log::debug!("shaneson creating savepoint success {}", height);
 
+      let wtx = index.begin_write()?;
+
+      wtx.persistent_savepoint()?;
+
+      Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
+      wtx.commit()?;
+
+      log::debug!("Successfully create savepoint at height {}", height);
     }
-
-    // if cfg!(test) {
-    // } else {
-    //   if let redb::Durability::None = index.durability {
-    //     return Ok(());
-    //   }
-  
-    //   let chain_height = index.get_chain_height().unwrap();  
-    //   if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
-    //     && (chain_height.saturating_sub(height)<= CHAIN_TIP_DISTANCE ) 
-    //   {
-    //     let wtx = index.begin_write()?;
-  
-    //     let savepoints = wtx.list_persistent_savepoints()?.collect::<Vec<u64>>();
-  
-    //     if savepoints.len() >= MAX_SAVEPOINTS {
-    //       wtx.delete_persistent_savepoint(savepoints.into_iter().min().unwrap())?;
-    //     }
-  
-    //     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
-    //     wtx.commit()?;
-  
-    //     let wtx = index.begin_write()?;
-  
-    //     log::debug!("creating savepoint at height {}", height);
-    //     wtx.persistent_savepoint()?;
-  
-    //     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
-    //     wtx.commit()?;
-    //   }
-    // }
     
     Ok(())
   }
