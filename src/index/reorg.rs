@@ -83,17 +83,6 @@ impl Reorg {
 
     if (height % 1000 == 0) {
       log::debug!("shaneson trying save point");
-
-      let wtx = index.begin_write()?;
-      let savepoints = wtx.list_persistent_savepoints()?.collect::<Vec<u64>>();
-
-      if savepoints.len() >= MAX_SAVEPOINTS {
-        wtx.delete_persistent_savepoint(savepoints.into_iter().min().unwrap())?;
-      }
-
-      Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
-      wtx.commit()?;
-
       let wtx = index.begin_write()?;
 
       log::debug!("shaneson creating savepoint at height {}", height);
