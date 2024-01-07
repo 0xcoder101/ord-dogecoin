@@ -249,7 +249,6 @@ impl Index {
           .set_cache_size(db_cache_size)
           .create(&path)?;
 
-
         let tx = database.begin_write()?;
 
         #[cfg(test)]
