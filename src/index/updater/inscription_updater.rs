@@ -215,7 +215,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               
               let old_satpoint = Index::get_satpoint_by_inscriptionId(self.id_to_satpoint, &inscription_id);
               // TODO: shaneson debug
-              new_flotsam_inscriptions.push(Flotsam {
+              inscriptions.push(Flotsam {
                 txid: _txid,
                 old_satpoint: old_satpoint?.unwrap(),
                 inscription_id: og_inscription_id,
@@ -224,11 +224,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               });  
             }
           }
-    }
-    
-    inscriptions.extend(new_flotsam_inscriptions);
- 
-
+    } 
 
     let is_coinbase = tx
       .input
