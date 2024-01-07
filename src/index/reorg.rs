@@ -93,6 +93,7 @@ impl Reorg {
         index
         .client
         .get_blockchain_info()?
+        .chain.as_str()
     );
 
     if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
