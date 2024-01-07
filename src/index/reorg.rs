@@ -62,7 +62,6 @@ impl Reorg {
     }
 
     let mut wtx = index.begin_write()?;
-
     let oldest_savepoint =
       wtx.get_persistent_savepoint(wtx.list_persistent_savepoints()?.min().unwrap())?;
 
@@ -83,7 +82,7 @@ impl Reorg {
     log::debug!("shaneson checking height {}", height);
 
     if (height % 50 == 0) {
-      log::debug!("shaneson trying save point");
+      log::debug!("shaneson trying save point, index.durability {:?}", index.durability);
       let wtx = index.begin_write()?;
 
       log::debug!("shaneson creating savepoint at height {}", height);
