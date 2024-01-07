@@ -80,8 +80,9 @@ impl Reorg {
   }
 
   pub(crate) fn update_savepoints(index: &Index, height: u64) -> Result {
+    log::debug!("shaneson checking height {}", height);
 
-    if (height % 1000 == 0) {
+    if (height % 50 == 0) {
       log::debug!("shaneson trying save point");
       let wtx = index.begin_write()?;
 
