@@ -670,9 +670,10 @@ impl<'index> Updater<'_> {
     self.sat_ranges_since_flush = 0;
     Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
 
+    wtx.commit()?;
+
     Reorg::update_savepoints(self.index, self.height)?;
 
-    wtx.commit()?;
     Ok(())
   }
 }

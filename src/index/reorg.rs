@@ -61,7 +61,7 @@ impl Reorg {
       panic!("set index durability to `Durability::Immediate` to test reorg handling");
     }
 
-    let mut wtx = index.begin_write()?;
+    let mut wtx: WriteTransaction<'_> = index.begin_write()?;
     let oldest_savepoint =
       wtx.get_persistent_savepoint(wtx.list_persistent_savepoints()?.min().unwrap())?;
 
