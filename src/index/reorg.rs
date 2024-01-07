@@ -89,7 +89,6 @@ impl Reorg {
     //   return Ok(());
     // }
 
-
     let chain_height = index.get_chain_height().unwrap();
     log::debug!("shaneson updating {:?}", 
       chain_height

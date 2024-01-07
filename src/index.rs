@@ -640,8 +640,7 @@ impl Index {
   }
 
   pub(crate) fn get_chain_height(&self) -> Result<u64> {
-    let height: u64 = self.client.get_blockchain_info()?.headers;
-    Ok(height)
+    Ok(self.client.get_block_count().unwrap())
   }
 
   pub(crate) fn rare_sat_satpoint(&self, sat: Sat) -> Result<Option<SatPoint>> {
