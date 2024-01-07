@@ -213,11 +213,13 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
                 index: 0
               };
               
-              let old_satpoint = Index::get_satpoint_by_inscriptionId(self.id_to_satpoint, &inscription_id);
-              // TODO: shaneson debug
+              // TODO: old_satpoint set to 0:0 temporarily
               inscriptions.push(Flotsam {
                 txid: _txid,
-                old_satpoint: old_satpoint?.unwrap(),
+                old_satpoint: SatPoint {
+                  outpoint: tx.input[0].previous_output,
+                  offset: 0,
+                },
                 inscription_id: og_inscription_id,
                 offset: 0,
                 origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
