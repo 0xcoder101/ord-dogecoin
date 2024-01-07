@@ -89,20 +89,14 @@ impl Reorg {
     //   return Ok(());
     // }
 
+
+    let chain_height = index.get_chain_height().unwrap();
     log::debug!("shaneson updating {:?}", 
-        index
-        .client
-        .get_blockchain_info()?
-        .chain.as_str()
+      chain_height
     );
 
     if (height < SAVEPOINT_INTERVAL || height % SAVEPOINT_INTERVAL == 0)
-      && index
-        .client
-        .get_blockchain_info()?
-        .headers
-        .saturating_sub(height)
-        <= CHAIN_TIP_DISTANCE
+      && (chain_height.saturating_sub(height)<= CHAIN_TIP_DISTANCE ) 
     {
       let wtx = index.begin_write()?;
 
