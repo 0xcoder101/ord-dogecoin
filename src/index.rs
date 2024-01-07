@@ -164,28 +164,28 @@ impl Index {
   pub(crate) fn open(options: &Options) -> Result<Self> {
 
     // cookie
-    // let cookie_file = options
-    //   .cookie_file()
-    //   .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
-    // let rpc_url = options.rpc_url();
-    // log::info!(
-    //   "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
-    //   cookie_file.display()
-    // );
-    // let auth = Auth::CookieFile(cookie_file);
-    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
-
-    // rpc
+    let cookie_file = options
+      .cookie_file()
+      .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
     let rpc_url = options.rpc_url();
-    let rpc_pass = options.get_rpc_password();
-    let rpc_user = options.get_rpc_username();
-    let auth = Auth::UserPass(rpc_user, rpc_pass);
+    log::info!(
+      "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
+      cookie_file.display()
+    );
+    let auth = Auth::CookieFile(cookie_file);
     let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
 
-    let data_dir = options.data_dir()?;
-    if let Err(err) = fs::create_dir_all(&data_dir) {
-      bail!("failed to create data dir `{}`: {err}", data_dir.display());
-    }
+    // rpc
+    // let rpc_url = options.rpc_url();
+    // let rpc_pass = options.get_rpc_password();
+    // let rpc_user = options.get_rpc_username();
+    // let auth = Auth::UserPass(rpc_user, rpc_pass);
+    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
+
+    // let data_dir = options.data_dir()?;
+    // if let Err(err) = fs::create_dir_all(&data_dir) {
+    //   bail!("failed to create data dir `{}`: {err}", data_dir.display());
+    // }
     
     let path = if let Some(path) = &options.index {
       path.clone()
