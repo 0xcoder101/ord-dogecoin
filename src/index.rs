@@ -296,7 +296,7 @@ impl Index {
       options.chain().genesis_block().coinbase().unwrap().clone();
 
     // shaneson checking
-    let durability = redb::Durability::Immediate;
+    let durability = redb::Durability::None;
     // let durability = if cfg!(test) {
     //   redb::Durability::None
     // } else {
