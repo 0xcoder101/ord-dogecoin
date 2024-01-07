@@ -674,6 +674,11 @@ impl<'index> Updater<'_> {
 
     Reorg::update_savepoints(self.index, self.height)?;
 
+    // test reorg
+    if (self.height % 51 == 0) {
+        Reorg::handle_reorg(self.index, self.height, 0);
+    }
+
     Ok(())
   }
 }

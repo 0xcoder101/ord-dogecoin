@@ -55,6 +55,8 @@ impl Reorg {
   }
   
   pub(crate) fn handle_reorg(index: &Index, height: u64, depth: u64) -> Result {
+    log::info!("shaneson testing reorg at {depth} at height {height}");
+
     log::info!("rolling back database after reorg of depth {depth} at height {height}");
 
     if let redb::Durability::None = index.durability {
