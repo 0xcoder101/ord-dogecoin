@@ -295,11 +295,12 @@ impl Index {
     let genesis_block_coinbase_transaction =
       options.chain().genesis_block().coinbase().unwrap().clone();
 
-    let durability = if cfg!(test) {
-      redb::Durability::None
-    } else {
-      redb::Durability::Immediate
-    };
+    let durability = redb::Durability::Immediate;
+    // let durability = if cfg!(test) {
+    //   redb::Durability::None
+    // } else {
+    //   redb::Durability::Immediate
+    // };
 
     Ok(Self {
       genesis_block_coinbase_txid: genesis_block_coinbase_transaction.txid(),
