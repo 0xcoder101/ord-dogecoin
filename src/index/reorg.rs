@@ -86,9 +86,9 @@ impl Reorg {
       let wtx = index.begin_write()?;
       
       log::debug!("shaneson creating savepoint at height {}", height);
-      // wtx.persistent_savepoint()?;
+      wtx.persistent_savepoint()?;
 
-      // Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
+      Index::increment_statistic(&wtx, Statistic::Commits, 1)?;
       wtx.commit()?;
     }
 
