@@ -132,9 +132,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       }
     }
 
-
-    for flotsam in inscriptions.iter() {
-      if (flotsam.offset != 0) {
+    if inscriptions.iter().all(|flotsam| flotsam.offset != 0) {
           let previous_txid = tx.input[0].previous_output.txid;
           let previous_txid_bytes: [u8; 32] = previous_txid.into_inner();
           let mut txids_vec = vec![];
@@ -214,22 +212,24 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
                 txid: _txid,
                 index: 0
               };
-
+              
+              let old_satpoint = Index::get_satpoint_by_inscriptionId(self.id_to_satpoint, &inscription_id);
               // TODO: shaneson debug
               new_flotsam_inscriptions.push(Flotsam {
                 txid: _txid,
-                old_satpoint: flotsam.old_satpoint,
+                old_satpoint: old_satpoint?.unwrap(),
                 inscription_id: og_inscription_id,
                 offset: 0,
                 origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
               });  
             }
           }
-        }
     }
     
     inscriptions.extend(new_flotsam_inscriptions);
  
+
+
     let is_coinbase = tx
       .input
       .first()

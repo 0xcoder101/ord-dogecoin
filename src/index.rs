@@ -1067,8 +1067,19 @@ impl Index {
         .begin_read()?
         .open_table(INSCRIPTION_ID_TO_INSCRIPTION_ENTRY)?
         .get(&inscription_id.store())?
-        .map(|value| InscriptionEntry::load(value.value())),
+        .map(|value: redb::AccessGuard<'_, (u64, u64, u64, u64, u32)>| InscriptionEntry::load(value.value())),
     )
+  }
+
+  // shaneson check
+  fn get_satpoint_by_inscriptionId<'a: 'tx, 'tx>(
+    id_to_satpoint: &'a impl ReadableTable<&'static InscriptionIdValue, &'static SatPointValue>,
+    outpoint: &InscriptionIdValue,
+  ) -> Result<Option<SatPoint>>{
+      Ok(
+        id_to_satpoint.get(outpoint)?
+        .map(|value| SatPoint::load(*(value.value())))
+      )
   }
 
   // shaneson check
