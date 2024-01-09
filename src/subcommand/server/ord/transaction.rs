@@ -27,8 +27,16 @@ impl From<Action> for InscriptionAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptPubkey {
+  /// Address.
+  address: Option<Address>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[schema(as = ord::TxInscription)]
 #[serde(rename_all = "camelCase")]
+
 pub struct TxInscription {
   /// The action of the inscription.
   #[schema(value_type = ord::InscriptionAction)]
@@ -41,11 +49,18 @@ pub struct TxInscription {
   pub old_satpoint: String,
   /// The inscription satpoint of the transaction output.
   pub new_satpoint: Option<String>,
+  /// The message sender which is an address or script pubkey hash.
+  pub from: Option<Address>,
+  /// The message receiver which is an address or script pubkey hash.
+  pub to: Option<Address>,
 }
 
 impl TxInscription {
+  // TODU: set from and to
   pub(super) fn new(op: InscriptionOp, index: Arc<Index>) -> Result<Self> {
     Ok(TxInscription {
+      from: Option::None,
+      to: Option::None,
       action: op.action.into(),
       inscription_number: op.inscription_number,
       inscription_id: op.inscription_id.to_string(),
