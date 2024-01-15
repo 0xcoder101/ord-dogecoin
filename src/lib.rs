@@ -129,6 +129,13 @@ type Result<T = (), E = Error> = std::result::Result<T, E>;
 static INTERRUPTS: AtomicU64 = AtomicU64::new(0);
 static LISTENERS: Mutex<Vec<axum_server::Handle>> = Mutex::new(Vec::new());
 
+fn unbound_outpoint() -> OutPoint {
+  OutPoint {
+    txid: Hash::all_zeros(),
+    vout: 0,
+  }
+}
+
 fn integration_test() -> bool {
   env::var_os("ORD_INTEGRATION_TEST")
     .map(|value| value.len() > 0)

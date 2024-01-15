@@ -50,7 +50,7 @@ pub struct TxInscription {
   /// The inscription satpoint of the transaction output.
   pub new_satpoint: Option<String>,
   /// The message sender which is an address or script pubkey hash.
-  pub from: Option<Address>,
+  pub from: Address,
   /// The message receiver which is an address or script pubkey hash.
   pub to: Option<Address>,
 }
@@ -58,9 +58,37 @@ pub struct TxInscription {
 impl TxInscription {
   // TODU: set from and to
   pub(super) fn new(op: InscriptionOp, index: Arc<Index>) -> Result<Self> {
+    let from = index
+      .get_outpoint_entry(op.old_satpoint.outpoint)?
+      .map(|txout| Address::from_script(&txout.script_pubkey, index.get_chain_network()))
+      .ok_or(anyhow!(
+        "outpoint {} not found from database",
+        op.old_satpoint.outpoint
+      ))?
+      .unwrap();
+    let to = match op.new_satpoint {
+      Some(new_satpoint) => {
+        if new_satpoint.outpoint == unbound_outpoint() {
+          None
+        } else {
+          Some(
+            index
+              .get_outpoint_entry(new_satpoint.outpoint)?
+              .map(|txout| Address::from_script(&txout.script_pubkey, index.get_chain_network()))
+              .ok_or(anyhow!(
+                "outpoint {} not found from database",
+                new_satpoint.outpoint
+              ))?
+              .unwrap()
+          )
+        }
+      }
+      None => None,
+    };
+
     Ok(TxInscription {
-      from: Option::None,
-      to: Option::None,
+      from: from,
+      to: to,
       action: op.action.into(),
       inscription_number: op.inscription_number,
       inscription_id: op.inscription_id.to_string(),
@@ -102,6 +130,7 @@ pub struct BlockInscriptions {
     (status = 500, description = "Internal server error.", body = ApiError, example = json!(&ApiError::internal("internal error"))),
   )
 )]
+
 pub(crate) async fn ord_txid_inscriptions(
   Extension(index): Extension<Arc<Index>>,
   Path(txid): Path<String>,

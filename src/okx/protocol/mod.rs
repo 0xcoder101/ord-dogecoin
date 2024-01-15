@@ -5,6 +5,7 @@ pub(crate) mod protocol_manager;
 pub use self::protocol_manager::ProtocolManager;
 
 use {
+  super::*,
   crate::Options,
   bitcoin::Network,
 };
@@ -15,6 +16,7 @@ pub struct BlockContext {
   pub blockheight: u64,
   pub blocktime: u32,
 }
+
 #[derive(Debug, Clone)]
 pub struct ProtocolConfig {
   first_inscription_height: u64,

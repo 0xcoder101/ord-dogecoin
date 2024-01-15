@@ -37,7 +37,7 @@ pub struct StateReadWrite<'db, 'a> {
 impl<'db, 'a> StateReadWrite<'db, 'a> {
   pub fn new(wtx: &'a WriteTransaction<'db>) -> Self {
     Self {
-      ord: OrdStateRW::new(wtx)
+      ord: OrdStateRW::new(wtx),
     }
   }
 }

@@ -30,11 +30,13 @@ pub(super) struct InscriptionUpdater<'a, 'db, 'tx> {
   pub(super) next_number: u64,
   number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
   outpoint_to_value: &'a mut Table<'db, 'tx, &'static OutPointValue, u64>,
+  outpoint_to_entry: &'a mut Table<'db, 'tx, &'static OutPointValue, &'static [u8]>,
   reward: u64,
   sat_to_inscription_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
   satpoint_to_id: &'a mut Table<'db, 'tx, &'static SatPointValue, &'static InscriptionIdValue>,
   timestamp: u32,
   value_cache: &'a mut HashMap<OutPoint, u64>,
+  tx_out_cache: &'a mut HashMap<OutPoint, TxOut>,
 }
 
 impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
@@ -49,10 +51,12 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     lost_sats: u64,
     number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
     outpoint_to_value: &'a mut Table<'db, 'tx, &'static OutPointValue, u64>,
+    outpoint_to_entry: &'a mut Table<'db, 'tx, &'static OutPointValue, &'static [u8]>,
     sat_to_inscription_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
     satpoint_to_id: &'a mut Table<'db, 'tx, &'static SatPointValue, &'static InscriptionIdValue>,
     timestamp: u32,
     value_cache: &'a mut HashMap<OutPoint, u64>,
+    tx_out_cache: &'a mut HashMap<OutPoint, TxOut>,
   ) -> Result<Self> {
     let next_number = number_to_id
       .iter()?
@@ -75,11 +79,13 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       next_number,
       number_to_id,
       outpoint_to_value,
+      outpoint_to_entry,
       reward: Height(height).subsidy(),
       sat_to_inscription_id,
       satpoint_to_id,
       timestamp,
       value_cache,
+      tx_out_cache
     })
   }
 
@@ -114,6 +120,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           );
         }
 
+        // shaneson add
         input_value += if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
           value
         } else if let Some(value) = self
@@ -122,12 +129,14 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
         {
           value.value()
         } else {
-          self.value_receiver.blocking_recv().ok_or_else(|| {
+          let _value = self.value_receiver.blocking_recv().ok_or_else(|| {
             anyhow!(
               "failed to get transaction for {}",
               tx_in.previous_output.txid
             )
-          })?
+          })?;
+
+          _value
         }
       }
     }
@@ -260,6 +269,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
 
         self.update_inscription_location(
           input_sat_ranges,
+          false,
           inscriptions.next().unwrap(),
           new_satpoint,
         )?;
@@ -274,6 +284,15 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
         },
         tx_out.value,
       );
+
+      // shaneson add
+      self.tx_out_cache.insert(
+        OutPoint {
+          vout: vout.try_into().unwrap(),
+          txid,
+        },
+        tx_out.clone(),
+      );
     }
 
     if is_coinbase {
@@ -282,7 +301,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           outpoint: OutPoint::null(),
           offset: self.lost_sats + flotsam.offset - output_value,
         };
-        self.update_inscription_location(input_sat_ranges, flotsam, new_satpoint)?;
+        self.update_inscription_location(input_sat_ranges, is_coinbase, flotsam, new_satpoint)?;
       }
 
       Ok(self.reward - output_value)
@@ -299,6 +318,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
   fn update_inscription_location(
     &mut self,
     input_sat_ranges: Option<&VecDeque<(u64, u64)>>,
+    is_coinbase: bool,
     flotsam: Flotsam,
     new_satpoint: SatPoint,
   ) -> Result {
@@ -346,6 +366,8 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
 
     let new_satpoint = new_satpoint.store();
 
+    // // from block reward,
+
     // shaneson add
     self
     .operations
@@ -366,10 +388,10 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       new_satpoint: Some(Entry::load(new_satpoint)),
     });
 
-
     self.satpoint_to_id.insert(&new_satpoint, &inscription_id)?;
     self.id_to_satpoint.insert(&inscription_id, &new_satpoint)?;
 
     Ok(())
   }
+
 }

@@ -1,3 +1,5 @@
+use crate::okx::datastore::StateReadOnly;
+
 use {
   self::inscription_updater::InscriptionUpdater,
   super::{fetcher::Fetcher, *},
@@ -420,6 +422,7 @@ impl<'index> Updater<'_> {
       .map(|lost_sats| lost_sats.value())
       .unwrap_or(0);
 
+    let mut tx_out_cache: HashMap<OutPoint, TxOut> = HashMap::new();
     let mut inscription_updater = InscriptionUpdater::new(
       self.height,
       &mut inscription_id_to_satpoint,
@@ -431,10 +434,12 @@ impl<'index> Updater<'_> {
       lost_sats,
       &mut inscription_number_to_inscription_id,
       &mut outpoint_to_value,
+      &mut outpoint_to_entry,
       &mut sat_to_inscription_id,
       &mut satpoint_to_inscription_id,
       block.header.time,
       value_cache,
+      &mut tx_out_cache,
     )?;
 
     if self.index_sats {
@@ -532,12 +537,20 @@ impl<'index> Updater<'_> {
         lost_sats += inscription_updater.index_transaction_inscriptions(tx, *txid, None)?;
       }
     }
-    statistic_to_count.insert(&Statistic::LostSats.key(), &lost_sats)?;
+    statistic_to_count.insert(&Statistic::LostSats.key(), &lost_sats)?;    
 
-      
-    let operations = inscription_updater.operations.clone();
+    // Create a protocol manager to index the block
+    let operations: HashMap<Txid, Vec<ord::InscriptionOp>> = inscription_updater.operations.clone();
 
-    // Create a protocol manager to index the block of brc20, brc20s data.
+    // write tx_out to outpoint_to_entry table.
+    for (outpoint, tx_out) in tx_out_cache {
+      let mut entry = Vec::new();
+      tx_out.consensus_encode(&mut entry)?;
+      outpoint_to_entry.insert(&outpoint.store(), entry.as_slice())?;
+    }
+
+    std::mem::drop(outpoint_to_entry);
+
     let config = ProtocolConfig::new_with_options(&index.options);
     ProtocolManager::new(&index.client, &StateReadWrite::new(wtx), &config).index_block(
       BlockContext {

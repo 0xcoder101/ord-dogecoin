@@ -68,7 +68,6 @@ define_table! { WRITE_TRANSACTION_STARTING_BLOCK_COUNT_TO_TIMESTAMP, u64, u128 }
 
 define_table! { OUTPOINT_TO_ENTRY, &OutPointValue, &[u8] }
 
-
 pub(crate) struct Index {
   auth: Auth,
   client: Client,
@@ -476,7 +475,6 @@ impl Index {
       }
       Ok(result)
   }
-
 
   pub(crate) fn get_block_info_by_hash(&self, hash: BlockHash) -> Result<Option<GetBlockResult>> {
     self.client.get_block_info(&hash).into_option()
@@ -1069,6 +1067,43 @@ impl Index {
         .get(&inscription_id.store())?
         .map(|value: redb::AccessGuard<'_, (u64, u64, u64, u64, u32)>| InscriptionEntry::load(value.value())),
     )
+  }
+
+  // shaneson add
+  pub(crate) fn get_transaction_retries_by_index(
+    &self,
+    txid: Txid,
+  ) -> Result<Option<Transaction>> {
+    Index::get_transaction_retries(&self.client, txid)
+  }
+  
+  // shaneson add 
+  pub(crate) fn get_transaction_retries(
+    client: &Client,
+    txid: Txid,
+  ) -> Result<Option<Transaction>> {
+    let mut errors = 0;
+
+    loop {
+      match client.get_raw_transaction(&txid).into_option() {
+        Err(err) => {
+          if cfg!(test) {
+            return Err(err);
+          }
+          errors += 1;
+          let seconds = 1 << errors;
+          log::warn!("failed to fetch transaction {txid}, retrying in {seconds}s: {err}");
+
+          if seconds > 120 {
+            log::error!("would sleep for more than 120s, giving up");
+            return Err(err);
+          }
+
+          thread::sleep(Duration::from_secs(seconds));
+        }
+        Ok(result) => return Ok(result),
+      }
+    }
   }
 
   // shaneson check

@@ -1,3 +1,5 @@
+use anyhow::Error;
+
 use {
   super::*,
   crate::{
@@ -60,6 +62,7 @@ impl<'db, 'a> DataStoreReadWrite for OrdDbReadWriter<'db, 'a> {
   // OUTPOINT_TO_SCRIPT
 
   fn set_outpoint_to_txout(&self, outpoint: OutPoint, tx_out: &TxOut) -> Result<(), Self::Error> {
+
     let mut value = [0; 36];
     outpoint
       .consensus_encode(&mut value.as_mut_slice())
@@ -67,10 +70,12 @@ impl<'db, 'a> DataStoreReadWrite for OrdDbReadWriter<'db, 'a> {
 
     let mut entry = Vec::new();
     tx_out.consensus_encode(&mut entry)?;
+
     self
       .wtx
       .open_table(OUTPOINT_TO_ENTRY)?
       .insert(&value, entry.as_slice())?;
+
     Ok(())
   }
 
