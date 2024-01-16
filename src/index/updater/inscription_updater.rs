@@ -97,8 +97,6 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
   ) -> Result<u64> {
     // prepare a vec to build inscriptions
     let mut inscriptions = Vec::new();
-    let mut new_flotsam_inscriptions: Vec<Flotsam> = Vec::new();
-
     let mut input_value = 0;
     
     // loop each txInputs
@@ -120,8 +118,28 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           );
         }
 
-        // shaneson add
-        input_value += if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
+        // okx logic multi-level cache for UTXO set to get to the input amount
+        let _value1 = if let Some(tx_out) = self.tx_out_cache.get(&tx_in.previous_output)
+        {
+          tx_out.value
+        } else if let Some(tx_out) =
+          Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
+        {
+          tx_out.value
+        } else {
+          let tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
+            anyhow!(
+              "failed to get transaction for {}",
+              tx_in.previous_output.txid
+            )
+          })?;
+          self
+            .tx_out_cache
+            .insert(tx_in.previous_output, tx_out.clone());
+          tx_out.value
+        };
+
+        let _value2 = if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
           value
         } else if let Some(value) = self
           .outpoint_to_value
@@ -135,11 +153,18 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               tx_in.previous_output.txid
             )
           })?;
-          self
-            .tx_out_cache
-            .insert(tx_in.previous_output, _tx_out.clone());
           _tx_out.value
-        }
+        };
+        
+        log::info!(
+            "Shaneon debug, value1: {}", _value1
+        );
+
+        log::info!(
+          "Shaneon debug, value2: {}", _value2
+        );
+
+        input_value += _value2;
       }
     }
 
