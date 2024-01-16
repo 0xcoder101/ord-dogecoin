@@ -184,8 +184,8 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               let mut txs = vec![];
               txids_vec = txids.to_vec();
               for i in 0..txids.len() / 32 {
-                let txid = &txids[i * 32..i * 32 + 32];
-                let tx_result = self.txid_to_tx.get(txid)?;
+                let __txid = &txids[i * 32..i * 32 + 32];     
+                let tx_result = self.txid_to_tx.get(__txid)?;
                 let tx_result = tx_result.unwrap();
                 let tx_buf = tx_result.value();
                 let mut cursor = std::io::Cursor::new(tx_buf);
@@ -245,15 +245,14 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
                 .id_to_txids
                 .insert(&inscription_id, txids_vec.as_slice())?;
 
-              let _txid = Txid::from_slice(&txids_vec[0..32]).unwrap();
               let og_inscription_id = InscriptionId {
-                txid: _txid,
+                txid: Txid::from_slice(&txids_vec[0..32]).unwrap(),
                 index: 0
               };
               
               // TODO: old_satpoint set to 0:0 temporarily
               inscriptions.push(Flotsam {
-                txid: _txid,
+                txid: txid,
                 old_satpoint: SatPoint {
                   outpoint: tx.input[0].previous_output,
                   offset: 0,
@@ -393,7 +392,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       }
     }
 
-    let new_satpoint = new_satpoint.store();
+    let _new_satpoint = new_satpoint.store();
 
     // // from block reward,
 
@@ -414,11 +413,11 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
         Origin::New(_)=> Action::New,
       },
       old_satpoint: flotsam.old_satpoint,
-      new_satpoint: Some(Entry::load(new_satpoint)),
+      new_satpoint: Some(Entry::load(_new_satpoint)),
     });
 
-    self.satpoint_to_id.insert(&new_satpoint, &inscription_id)?;
-    self.id_to_satpoint.insert(&inscription_id, &new_satpoint)?;
+    self.satpoint_to_id.insert(&_new_satpoint, &inscription_id)?;
+    self.id_to_satpoint.insert(&inscription_id, &_new_satpoint)?;
 
     Ok(())
   }
