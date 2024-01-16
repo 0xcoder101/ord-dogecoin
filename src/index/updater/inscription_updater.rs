@@ -118,54 +118,55 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           );
         }
 
-        // old logic
-        // let _value2 = if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
-        //   // okx logic
-        //   self.tx_out_cache.get(&tx_in.previous_output);
-        //   value
-        // } else if let Some(value) = self
-        //   .outpoint_to_value
-        //   .remove(&tx_in.previous_output.store())?
-        // {
-        //   value.value()
-        // } else {
-        //   let _tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
-        //     anyhow!(
-        //       "failed to get transaction for {}",
-        //       tx_in.previous_output.txid
-        //     )
-        //   })?;
-        //   _tx_out.value
-        // };
+        let mut tx_out_from_blocking_recv: TxOut = TxOut::default();
 
-        // okx logic: multi-level cache for UTXO set to get to the input amount
-        let _value1 = if let Some(tx_out) = self.tx_out_cache.get(&tx_in.previous_output)
+        // doginal logick
+        let _value_raw = if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
+          value
+        } else if let Some(value) = self
+          .outpoint_to_value
+          .remove(&tx_in.previous_output.store())?
         {
-          self.value_cache.remove(&tx_in.previous_output);  //old logic
-          tx_out.value
-        } else if let Some(tx_out) =
-          Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
-        {
-          self.outpoint_to_value.remove(&tx_in.previous_output.store())?;
-          tx_out.value
+          value.value()
         } else {
-          let tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
+          tx_out_from_blocking_recv = self.value_receiver.blocking_recv().ok_or_else(|| {
             anyhow!(
               "failed to get transaction for {}",
               tx_in.previous_output.txid
             )
           })?;
-          self
-            .tx_out_cache
-            .insert(tx_in.previous_output, tx_out.clone());
+          tx_out_from_blocking_recv.value
+        };
+
+        // okx 
+        let _value1 = if let Some(tx_out) = self.tx_out_cache.get(&tx_in.previous_output)
+        {
           tx_out.value
+        } else if let Some(tx_out) =
+          Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
+        {
+          tx_out.value
+        } else {
+          let _value = if (tx_out_from_blocking_recv.value < 0xffffffffffffffff) {
+            self
+            .tx_out_cache
+            .insert(tx_in.previous_output, tx_out_from_blocking_recv.clone());
+            tx_out_from_blocking_recv.value
+          } else {
+              _value_raw
+          };
+          _value
         };
         
         log::info!(
             "Shaneon debug, value1: {}", _value1
         );
 
-        input_value += _value1;
+        log::info!(
+          "Shaneon debug, value2: {}", _value_raw
+        );
+
+        input_value += _value_raw;
       }
     }
 
