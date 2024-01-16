@@ -24,7 +24,7 @@ pub(super) struct InscriptionUpdater<'a, 'db, 'tx> {
   id_to_txids: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, &'static [u8]>,
   txid_to_tx: &'a mut Table<'db, 'tx, &'static [u8], &'static [u8]>,
   partial_txid_to_txids: &'a mut Table<'db, 'tx, &'static [u8], &'static [u8]>,
-  value_receiver: &'a mut Receiver<u64>,
+  value_receiver: &'a mut Receiver<TxOut>,
   id_to_entry: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, InscriptionEntryValue>,
   pub(super) lost_sats: u64,
   pub(super) next_number: u64,
@@ -46,7 +46,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     id_to_txids: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, &'static [u8]>,
     txid_to_tx: &'a mut Table<'db, 'tx, &'static [u8], &'static [u8]>,
     partial_txid_to_txids: &'a mut Table<'db, 'tx, &'static [u8], &'static [u8]>,
-    value_receiver: &'a mut Receiver<u64>,
+    value_receiver: &'a mut Receiver<TxOut>,
     id_to_entry: &'a mut Table<'db, 'tx, &'static InscriptionIdValue, InscriptionEntryValue>,
     lost_sats: u64,
     number_to_id: &'a mut Table<'db, 'tx, u64, &'static InscriptionIdValue>,
@@ -129,14 +129,16 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
         {
           value.value()
         } else {
-          let _value = self.value_receiver.blocking_recv().ok_or_else(|| {
+          let _tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
             anyhow!(
               "failed to get transaction for {}",
               tx_in.previous_output.txid
             )
           })?;
-
-          _value
+          self
+            .tx_out_cache
+            .insert(tx_in.previous_output, _tx_out.clone());
+          _tx_out.value
         }
       }
     }

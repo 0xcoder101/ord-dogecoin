@@ -103,7 +103,7 @@ impl<'index> Updater<'_> {
         &mut outpoint_sender,
         &mut tx_out_receiver,
         &mut wtx,
-        block,
+        block, 
         &mut value_cache,
       )?;
 
@@ -258,14 +258,14 @@ impl<'index> Updater<'_> {
     }
   }
 
-  fn spawn_fetcher(index: &Index) -> Result<(Sender<OutPoint>, Receiver<u64>)> {
+  fn spawn_fetcher(index: &Index) -> Result<(Sender<OutPoint>, Receiver<TxOut>)> {
     let fetcher = Fetcher::new(&index.rpc_url, index.auth.clone())?;
 
     // Not sure if any block has more than 20k inputs, but none so far after first inscription block
     const CHANNEL_BUFFER_SIZE: usize = 20_000;
     let (outpoint_sender, mut outpoint_receiver) =
       tokio::sync::mpsc::channel::<OutPoint>(CHANNEL_BUFFER_SIZE);
-    let (value_sender, value_receiver) = tokio::sync::mpsc::channel::<u64>(CHANNEL_BUFFER_SIZE);
+    let (value_sender, value_receiver) = tokio::sync::mpsc::channel::<TxOut>(CHANNEL_BUFFER_SIZE);
 
     // Batch 2048 missing inputs at a time. Arbitrarily chosen for now, maybe higher or lower can be faster?
     // Did rudimentary benchmarks with 1024 and 4096 and time was roughly the same.
@@ -312,7 +312,7 @@ impl<'index> Updater<'_> {
           };
           // Send all tx output values back in order
           for (i, tx) in txs.iter().flatten().enumerate() {
-            let Ok(_) = value_sender.send(tx.output[usize::try_from(outpoints[i].vout).unwrap()].value).await else {
+            let Ok(_) = value_sender.send(tx.output[usize::try_from(outpoints[i].vout).unwrap()].clone()).await else {
               log::error!("Value channel closed unexpectedly");
               return;
             };
@@ -328,7 +328,7 @@ impl<'index> Updater<'_> {
     &mut self,
     index: &Index,
     outpoint_sender: &mut Sender<OutPoint>,
-    value_receiver: &mut Receiver<u64>,
+    value_receiver: &mut Receiver<TxOut>,
     wtx: &mut WriteTransaction,
     block: BlockData,
     value_cache: &mut HashMap<OutPoint, u64>,
