@@ -68,6 +68,12 @@ impl TxInscription {
        op.new_satpoint
     ); 
 
+    log::info!(
+      "Shaneson Debug: op :{:?}",
+       op
+    ); 
+
+
     let from = index
       .get_outpoint_entry(op.old_satpoint.outpoint)?
       .map(|txout| Address::from_script(&txout.script_pubkey, index.get_chain_network()))
