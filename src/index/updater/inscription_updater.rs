@@ -118,13 +118,35 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           );
         }
 
-        // okx logic multi-level cache for UTXO set to get to the input amount
+        // old logic
+        // let _value2 = if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
+        //   // okx logic
+        //   self.tx_out_cache.get(&tx_in.previous_output);
+        //   value
+        // } else if let Some(value) = self
+        //   .outpoint_to_value
+        //   .remove(&tx_in.previous_output.store())?
+        // {
+        //   value.value()
+        // } else {
+        //   let _tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
+        //     anyhow!(
+        //       "failed to get transaction for {}",
+        //       tx_in.previous_output.txid
+        //     )
+        //   })?;
+        //   _tx_out.value
+        // };
+
+        // okx logic: multi-level cache for UTXO set to get to the input amount
         let _value1 = if let Some(tx_out) = self.tx_out_cache.get(&tx_in.previous_output)
         {
+          self.value_cache.remove(&tx_in.previous_output);  //old logic
           tx_out.value
         } else if let Some(tx_out) =
           Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
         {
+          self.outpoint_to_value.remove(&tx_in.previous_output.store())?;
           tx_out.value
         } else {
           let tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
@@ -138,33 +160,12 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
             .insert(tx_in.previous_output, tx_out.clone());
           tx_out.value
         };
-
-        let _value2 = if let Some(value) = self.value_cache.remove(&tx_in.previous_output) {
-          value
-        } else if let Some(value) = self
-          .outpoint_to_value
-          .remove(&tx_in.previous_output.store())?
-        {
-          value.value()
-        } else {
-          let _tx_out = self.value_receiver.blocking_recv().ok_or_else(|| {
-            anyhow!(
-              "failed to get transaction for {}",
-              tx_in.previous_output.txid
-            )
-          })?;
-          _tx_out.value
-        };
         
         log::info!(
             "Shaneon debug, value1: {}", _value1
         );
 
-        log::info!(
-          "Shaneon debug, value2: {}", _value2
-        );
-
-        input_value += _value2;
+        input_value += _value1;
       }
     }
 
