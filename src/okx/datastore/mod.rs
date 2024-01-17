@@ -1,9 +1,11 @@
 
 pub mod ord;
 mod redb;
+mod script_key;
 
 pub use self::{
   redb::{StateReadOnly, StateReadWrite},
+  script_key::ScriptKey,
 };
 
 pub trait StateReader {

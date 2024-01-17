@@ -1,7 +1,8 @@
 use {
   super::{error::ApiError, *},
   crate::okx::datastore::{
-    ord::{Action, InscriptionOp}
+    ord::{Action, InscriptionOp},
+    ScriptKey
   },
   axum::Json,
   utoipa::ToSchema,
@@ -28,9 +29,26 @@ impl From<Action> for InscriptionAction {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ScriptPubkey {
+pub enum ScriptPubkey {
   /// Address.
-  address: Option<Address>,
+  Address(String),
+  /// Non-standard script hash.
+  NonStandard(String),
+}
+
+impl Default for ScriptPubkey {
+  fn default() -> Self {
+    ScriptPubkey::NonStandard(String::new())
+  }
+}
+
+impl From<ScriptKey> for ScriptPubkey {
+  fn from(script_key: ScriptKey) -> Self {
+    match script_key {
+      ScriptKey::Address(address) => ScriptPubkey::Address(address.to_string()),
+      ScriptKey::ScriptHash(hash) => ScriptPubkey::NonStandard(hash.to_string()),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -50,9 +68,9 @@ pub struct TxInscription {
   /// The inscription satpoint of the transaction output.
   pub new_satpoint: Option<String>,
   /// The message sender which is an address or script pubkey hash.
-  pub from: Address,
+  pub from: ScriptPubkey,
   /// The message receiver which is an address or script pubkey hash.
-  pub to: Option<Address>,
+  pub to: Option<ScriptPubkey>,
 }
 
 impl TxInscription {
@@ -71,17 +89,16 @@ impl TxInscription {
     log::info!(
       "Shaneson Debug: op :{:?}",
        op
-    ); 
-
+    );
 
     let from = index
       .get_outpoint_entry(op.old_satpoint.outpoint)?
-      .map(|txout| Address::from_script(&txout.script_pubkey, index.get_chain_network()))
+      .map(|txout| ScriptKey::from_script(&txout.script_pubkey, index.get_chain_network()))
       .ok_or(anyhow!(
         "outpoint {} not found from database",
         op.old_satpoint.outpoint
       ))?
-      .unwrap();
+      .into();
     let to = match op.new_satpoint {
       Some(new_satpoint) => {
         if new_satpoint.outpoint == unbound_outpoint() {
@@ -90,13 +107,13 @@ impl TxInscription {
           Some(
             index
               .get_outpoint_entry(new_satpoint.outpoint)?
-              .map(|txout| Address::from_script(&txout.script_pubkey, index.get_chain_network()))
+              .map(|txout| ScriptKey::from_script(&txout.script_pubkey, index.get_chain_network()))
               .ok_or(anyhow!(
                 "outpoint {} not found from database",
                 new_satpoint.outpoint
               ))?
-              .unwrap()
-          )
+              .into()
+            )
         }
       }
       None => None,
