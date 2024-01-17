@@ -362,14 +362,18 @@ impl Index {
 
   // shaneson add
   pub(crate) fn get_outpoint_entry(&self, outpoint: OutPoint) -> Result<Option<TxOut>> {
-    Ok(
-      self
-        .database
-        .begin_read()?
-        .open_table(OUTPOINT_TO_ENTRY)?
-        .get(&outpoint.store())?
-        .map(|x| Decodable::consensus_decode(&mut io::Cursor::new(x.value())).unwrap()),
-    )
+    let _TxOut = self
+    .database
+    .begin_read()?
+    .open_table(OUTPOINT_TO_ENTRY)?
+    .get(&outpoint.store())?
+    .map(|x| Decodable::consensus_decode(&mut io::Cursor::new(x.value())).unwrap());
+    
+    log::info!(
+        "txOut: {:?}", _TxOut
+    );
+
+    Ok(_TxOut)
   }
 
   pub(crate) fn get_unspent_output_ranges(
