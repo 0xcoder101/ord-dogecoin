@@ -154,7 +154,7 @@ pub(crate) async fn ord_txid_inscriptions(
   log::debug!("rpc: get ord_txid_inscriptions: {}", txid);
   let txid = Txid::from_str(&txid).map_err(ApiError::bad_request)?;
 
-  let ops = index
+  let ops: Vec<InscriptionOp> = index
     .ord_txid_inscriptions(&txid)?
     .ok_or_api_not_found(OrdError::OperationNotFound)?;
 

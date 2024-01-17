@@ -92,7 +92,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
   pub(super) fn index_transaction_inscriptions(
     &mut self,
     tx: &Transaction,
-    txid: Txid,
+    TXID: Txid,
     input_sat_ranges: Option<&VecDeque<(u64, u64)>>,
   ) -> Result<u64> {
     // prepare a vec to build inscriptions
@@ -109,7 +109,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
         {
           inscriptions.push(
             Flotsam {
-              txid: txid,
+              txid: TXID,
               inscription_id: inscription_id,
               offset: input_value + old_satpoint.offset,
               old_satpoint: old_satpoint,
@@ -206,7 +206,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
             }
 
             ParsedInscription::Partial => {
-              let mut txid_vec = txid.into_inner().to_vec();
+              let mut txid_vec = TXID.into_inner().to_vec();
               txids_vec.append(&mut txid_vec);
 
               self
@@ -214,13 +214,13 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
                 .remove(&previous_txid_bytes.as_slice())?;
               self
                 .partial_txid_to_txids
-                .insert(&txid.into_inner().as_slice(), txids_vec.as_slice())?;
+                .insert(&TXID.into_inner().as_slice(), txids_vec.as_slice())?;
 
               let mut tx_buf = vec![];
               tx.consensus_encode(&mut tx_buf)?;
               self
                 .txid_to_tx
-                .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
+                .insert(&TXID.into_inner().as_slice(), tx_buf.as_slice())?;
             }
 
             ParsedInscription::Complete(_inscription) => {
@@ -232,9 +232,9 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               tx.consensus_encode(&mut tx_buf)?;
               self
                 .txid_to_tx
-                .insert(&txid.into_inner().as_slice(), tx_buf.as_slice())?;
+                .insert(&TXID.into_inner().as_slice(), tx_buf.as_slice())?;
 
-              let mut txid_vec = txid.into_inner().to_vec();
+              let mut txid_vec = TXID.into_inner().to_vec();
               txids_vec.append(&mut txid_vec);
 
               let mut inscription_id = [0_u8; 36];
@@ -252,7 +252,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               
               // TODO: old_satpoint set to 0:0 temporarily
               inscriptions.push(Flotsam {
-                txid: txid,
+                txid: TXID,
                 old_satpoint: SatPoint {
                   outpoint: tx.input[0].previous_output,
                   offset: 0,
@@ -282,16 +282,18 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     for (vout, tx_out) in tx.output.iter().enumerate() {
       let end = output_value + tx_out.value;
 
+      let current_outpoint = OutPoint {
+        txid: TXID,
+        vout: vout.try_into().unwrap(),
+      };
+
       while let Some(flotsam) = inscriptions.peek() {
         if flotsam.offset >= end {
           break;
         }
 
         let new_satpoint = SatPoint {
-          outpoint: OutPoint {
-            txid,
-            vout: vout.try_into().unwrap(),
-          },
+          outpoint: current_outpoint,
           offset: flotsam.offset - output_value,
         };
 
@@ -306,19 +308,13 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
       output_value = end;
 
       self.value_cache.insert(
-        OutPoint {
-          vout: vout.try_into().unwrap(),
-          txid,
-        },
+        current_outpoint,
         tx_out.value,
       );
 
       // shaneson add
       self.tx_out_cache.insert(
-        OutPoint {
-          vout: vout.try_into().unwrap(),
-          txid,
-        },
+        current_outpoint,
         tx_out.clone(),
       );
     }
