@@ -1,3 +1,5 @@
+use utoipa::openapi::info;
+
 use super::*;
 use crate::inscription::ParsedInscription;
 use crate::okx::datastore::ord::operation::{Action, InscriptionOp};
@@ -135,40 +137,34 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
               tx_in.previous_output.txid
             )
           })?;
+
           tx_out_from_blocking_recv.value
         };
 
         // okx 
         let _value1 = if let Some(tx_out) = self.tx_out_cache.get(&tx_in.previous_output)
-        {
-          tx_out.value
-        } else if let Some(tx_out) =
-          Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
-        {
-          tx_out.value
-        } else {
-          let _value = if (tx_out_from_blocking_recv.value < 0xffffffffffffffff) {
-            self
-            .tx_out_cache
-            .insert(tx_in.previous_output, tx_out_from_blocking_recv.clone());
-            tx_out_from_blocking_recv.value
+          {
+            tx_out.value
+          } else if let Some(tx_out) =
+            Index::transaction_output_by_outpoint(self.outpoint_to_entry, tx_in.previous_output)?
+          {
+            tx_out.value
           } else {
-              _value_raw
+            let _value = if (tx_out_from_blocking_recv.value < 0xffffffffffffffff) {
+              self
+              .tx_out_cache
+              .insert(tx_in.previous_output, tx_out_from_blocking_recv.clone());
+              tx_out_from_blocking_recv.value
+            } else {
+                _value_raw
+            };
+            _value
           };
-          _value
-        };
         
-        log::info!(
-            "Shaneon debug, value1: {}", _value1
-        );
-
-        log::info!(
-          "Shaneon debug, value2: {}", _value_raw
-        );
-
         input_value += _value_raw;
       }
     }
+    
 
     if inscriptions.iter().all(|flotsam| flotsam.offset != 0) {
           let previous_txid = tx.input[0].previous_output.txid;
@@ -178,14 +174,15 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           let txs = match self
             .partial_txid_to_txids
             .get(&previous_txid_bytes.as_slice())?
-          {
+          {            
             Some(partial_txids) => {
+
               let txids = partial_txids.value();
               let mut txs = vec![];
               txids_vec = txids.to_vec();
               for i in 0..txids.len() / 32 {
-                let __txid = &txids[i * 32..i * 32 + 32];     
-                let tx_result = self.txid_to_tx.get(__txid)?;
+                let txid = &txids[i * 32..i * 32 + 32];
+                let tx_result = self.txid_to_tx.get(txid)?;
                 let tx_result = tx_result.unwrap();
                 let tx_buf = tx_result.value();
                 let mut cursor = std::io::Cursor::new(tx_buf);
@@ -206,21 +203,21 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
             }
 
             ParsedInscription::Partial => {
-              let mut txid_vec = TXID.into_inner().to_vec();
-              txids_vec.append(&mut txid_vec);
+                let mut txid_vec = TXID.into_inner().to_vec();
+                txids_vec.append(&mut txid_vec);
 
-              self
-                .partial_txid_to_txids
-                .remove(&previous_txid_bytes.as_slice())?;
-              self
-                .partial_txid_to_txids
-                .insert(&TXID.into_inner().as_slice(), txids_vec.as_slice())?;
+                self
+                  .partial_txid_to_txids
+                  .remove(&previous_txid_bytes.as_slice())?;
+                self
+                  .partial_txid_to_txids
+                  .insert(&TXID.into_inner().as_slice(), txids_vec.as_slice())?;
 
-              let mut tx_buf = vec![];
-              tx.consensus_encode(&mut tx_buf)?;
-              self
-                .txid_to_tx
-                .insert(&TXID.into_inner().as_slice(), tx_buf.as_slice())?;
+                let mut tx_buf = vec![];
+                tx.consensus_encode(&mut tx_buf)?;
+                self
+                  .txid_to_tx
+                  .insert(&TXID.into_inner().as_slice(), tx_buf.as_slice())?;
             }
 
             ParsedInscription::Complete(_inscription) => {
@@ -245,22 +242,25 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
                 .id_to_txids
                 .insert(&inscription_id, txids_vec.as_slice())?;
 
+              
               let og_inscription_id = InscriptionId {
                 txid: Txid::from_slice(&txids_vec[0..32]).unwrap(),
                 index: 0
               };
-              
-              // TODO: old_satpoint set to 0:0 temporarily
+
+              // set old_satpoint after the loop
               inscriptions.push(Flotsam {
                 txid: TXID,
-                old_satpoint: SatPoint {
-                  outpoint: tx.input[0].previous_output,
-                  offset: 0,
-                },
+                old_satpoint: 
+                  SatPoint {
+                    outpoint: tx.input[0].previous_output,
+                    offset: 0,
+                  },
                 inscription_id: og_inscription_id,
                 offset: 0,
                 origin: Origin::New(input_value - tx.output.iter().map(|txout| txout.value).sum::<u64>()),
               });  
+
             }
           }
     } 
@@ -346,6 +346,10 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     flotsam: Flotsam,
     new_satpoint: SatPoint,
   ) -> Result {
+    let _action = match flotsam.origin {
+      Origin::Old(_) => Action::Transfer,
+      Origin::New(_)=> Action::New,
+    };
     let inscription_id = flotsam.inscription_id.store();
 
     match flotsam.origin {
@@ -357,7 +361,7 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
           .number_to_id
           .insert(&self.next_number, &inscription_id)?;
 
-        let mut sat = None;
+        let mut sat: Option<Sat> = None;
         if let Some(input_sat_ranges) = input_sat_ranges {
           let mut offset = 0;
           for (start, end) in input_sat_ranges {
@@ -389,8 +393,6 @@ impl<'a, 'db, 'tx> InscriptionUpdater<'a, 'db, 'tx> {
     }
 
     let _new_satpoint = new_satpoint.store();
-
-    // // from block reward,
 
     // shaneson add
     self

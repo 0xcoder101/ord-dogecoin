@@ -1,4 +1,7 @@
 
+use bitcoin::hashes::hex::FromHex;
+use utoipa::openapi::info;
+
 use crate::okx::datastore::{StateReader, ord::{DataStoreReadOnly, DataStoreReadWrite}};
 
 use {
@@ -63,7 +66,7 @@ impl<'a, RW: StateRWriter> ProtocolManager<'a, RW,> {
         // save all transaction operations to ord database.
         if self.config.enable_ord_receipts
           && context.blockheight >= self.config.first_inscription_height
-        {
+        {         
           ord_proto::save_transaction_operations(self.state_read_write_store.ord(), txid, tx_operations)?;
           inscriptions_size += tx_operations.len();
         }
@@ -94,12 +97,6 @@ impl<'a, RW: StateRWriter> ProtocolManager<'a, RW,> {
 
   fn update_outpoint_to_txout(&self, outpoint_to_txout_cache: HashMap<OutPoint, TxOut>) -> Result {
     for (outpoint, txout) in outpoint_to_txout_cache {
-
-      log::info!(
-          "Shaneson output: {outpoint}, txout.value : {}, txout.script: {} ",
-          txout.value,
-          txout.script_pubkey
-      );
 
       self
         .state_read_write_store

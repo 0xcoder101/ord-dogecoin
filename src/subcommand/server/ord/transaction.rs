@@ -76,21 +76,6 @@ pub struct TxInscription {
 impl TxInscription {
   // TODU: set from and to
   pub(super) fn new(op: InscriptionOp, index: Arc<Index>) -> Result<Self> {
-    log::info!(
-        "Shaneson Debug: op.old_satpoint.outpoint :{:?}",
-        op.old_satpoint.outpoint
-    );
-
-    log::info!(
-      "Shaneson Debug: op.new_satpoint.outpoint :{:?}",
-       op.new_satpoint
-    ); 
-
-    log::info!(
-      "Shaneson Debug: op :{:?}",
-       op
-    );
-
     let from = index
       .get_outpoint_entry(op.old_satpoint.outpoint)?
       .map(|txout| ScriptKey::from_script(&txout.script_pubkey, index.get_chain_network()))

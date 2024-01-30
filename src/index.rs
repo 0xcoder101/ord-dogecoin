@@ -163,23 +163,23 @@ impl Index {
   pub(crate) fn open(options: &Options) -> Result<Self> {
 
     // cookie
-    let cookie_file = options
-      .cookie_file()
-      .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
-    let rpc_url = options.rpc_url();
-    log::info!(
-      "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
-      cookie_file.display()
-    );
-    let auth = Auth::CookieFile(cookie_file);
-    let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
+    // let cookie_file = options
+    //   .cookie_file()
+    //   .map_err(|err| anyhow!("failed to get cookie file path: {err}"))?;
+    // let rpc_url = options.rpc_url();
+    // log::info!(
+    //   "Connecting to Dogecoin Core RPC server at {rpc_url} using credentials from `{}`",
+    //   cookie_file.display()
+    // );
+    // let auth = Auth::CookieFile(cookie_file);
+    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
 
     // rpc
-    // let rpc_url = options.rpc_url();
-    // let rpc_pass = options.get_rpc_password();
-    // let rpc_user = options.get_rpc_username();
-    // let auth = Auth::UserPass(rpc_user, rpc_pass);
-    // let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
+    let rpc_url = options.rpc_url();
+    let rpc_pass = options.get_rpc_password();
+    let rpc_user = options.get_rpc_username();
+    let auth = Auth::UserPass(rpc_user, rpc_pass);
+    let client = Client::new(&rpc_url, auth.clone()).context("failed to connect to RPC URL")?;
 
     let data_dir = options.data_dir()?;
     if let Err(err) = fs::create_dir_all(&data_dir) {
@@ -368,11 +368,6 @@ impl Index {
     .open_table(OUTPOINT_TO_ENTRY)?
     .get(&outpoint.store())?
     .map(|x| Decodable::consensus_decode(&mut io::Cursor::new(x.value())).unwrap());
-    
-    log::info!(
-        "txOut: {:?}", _TxOut
-    );
-
     Ok(_TxOut)
   }
 
@@ -511,7 +506,7 @@ impl Index {
   pub(crate) fn update(&self) -> Result {
     let mut updater = Updater::new(self)?;
 
-    loop {
+    loop {      
       match updater.update_index() {
         Ok(ok) => return Ok(ok),
         Err(err) => {
